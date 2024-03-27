@@ -4,7 +4,7 @@
 #include "def.h"
 /**
  * Inizializza il display LCD
- * 
+ *
  * @param lcd puntatore all'oggetto LCD_I2C
  * @param version versione del programma
  * @return true se l'inizializzazione è andata a buon fine
@@ -22,7 +22,6 @@ bool lcd_init(LCD_I2C *lcd, String version)
     return true;
 }
 
-
 void lcd_idle(LCD_I2C *lcd, Mode mode)
 {
     String modeStr = mode == MODE_READ ? "READ" : "WRITE";
@@ -33,10 +32,38 @@ void lcd_idle(LCD_I2C *lcd, Mode mode)
     lcd->print("Waiting card...");
 }
 
-
 void lcd_reading(LCD_I2C *lcd)
 {
     lcd->clear();
     lcd->home();
     lcd->print("Reading card...");
 }
+
+void lcd_writing(LCD_I2C *lcd)
+{
+    lcd->clear();
+    lcd->home();
+    lcd->print("Writing card...");
+}
+
+void lcd_reading_result(LCD_I2C *lcd, String uid, String value)
+{
+    lcd->clear();
+    lcd->home();
+    lcd->print(uid);
+    lcd->setCursor(0, 1);
+    lcd->print(value);
+}
+
+void lcd_reading_error(LCD_I2C *lcd, String error)
+{
+    lcd->clear();
+    lcd->home();
+    lcd->print("ERROR");
+    lcd->setCursor(0, 1);
+    lcd->autoscroll();
+    lcd->print(error);
+    lcd->noAutoscroll();
+}
+
+
