@@ -66,12 +66,11 @@ void loop()
     if (!rfid.PICC_ReadCardSerial())
         return;
 
-    fired = true; // mark that a card is detected
 
     /***********************************************************************/
 
-    // Show some details of the PICC (that is: the tag/card)
-    Serial.print(F("Card detected:"));
+    fired = true; // mark that a card is detected
+    Serial.print(F("Card detected:")); // Show some details of the PICC (that is: the tag/card)
     rfid.PICC_DumpDetailsToSerial(&(rfid.uid)); // dump some details about the card
     Serial.println();
 

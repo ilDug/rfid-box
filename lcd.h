@@ -36,6 +36,8 @@ void lcd_reading(LCD_I2C *lcd)
 {
     lcd->clear();
     lcd->home();
+    lcd->print("Card Detected!");
+    lcd->setCursor(0, 1);
     lcd->print("Reading card...");
 }
 
@@ -43,6 +45,8 @@ void lcd_writing(LCD_I2C *lcd)
 {
     lcd->clear();
     lcd->home();
+    lcd->print("Card Detected!");
+    lcd->setCursor(0, 1);
     lcd->print("Writing card...");
 }
 
