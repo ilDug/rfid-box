@@ -19,6 +19,7 @@
 #include <MFRC522.h> // https://github.com/miguelbalboa/rfid
 #include <SPI.h>
 #include "dag-button.h"
+#include "dag-timer.h"
 
 
 // PINS
@@ -56,7 +57,7 @@ void setup()
 void loop()
 {
     btnMode.onPress(toggleMode); // Switch between read and write mode when button is pressed
-    
+
 }
 
 
