@@ -20,11 +20,26 @@
 #include <SPI.h>
 #include "dag-button.h"
 
+
+// PINS
 const int SS_PIN = 10; // Slave Select Pin
 const int RST_PIN = 9; // Reset Pin
+const int BZR_PIN = 0; // Buzzer Pin
+const int BTN_MODE_PIN = 0; // Mode Button Pin
+const int BTN_SELECT_PIN = 0; // Select Button Pin
+
+// BUTTONS
+DagButton btnMode(BTN_MODE_PIN, PULLUP);
+DagButton btnSelect(BTN_SELECT_PIN, PULLUP);
 
 MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
 MFRC522::MIFARE_Key key;       // Key for the read and write
+
+enum  Mode {
+    MODE_READ,
+    MODE_WRITE
+};
+uint8_t mode = MODE_READ;
 
 String version = "v1.0.0"; // Version of the program
 
@@ -40,6 +55,17 @@ void setup()
 
 void loop()
 {
+    btnMode.onPress(toggleMode); // Switch between read and write mode when button is pressed
+    
+}
+
+
+/**
+ * switch between modes
+*/
+void toggleMode()
+{
+    mode = mode == MODE_READ ? MODE_WRITE : MODE_READ;
 }
 
 
