@@ -46,6 +46,26 @@ void setup()
 void loop()
 {
     btnMode.onPress(toggleMode); // Switch between read and write mode when button is pressed
+
+    // Look for new cards, else do nothing
+    if (!rfid.PICC_IsNewCardPresent())
+        return;
+
+    // Select one of the cards, else do nothing
+    if (!rfid.PICC_ReadCardSerial())
+        return;
+
+    // if a new card is present, read or write data
+    switch (mode)
+    {
+    case MODE_READ:
+        lcd_reading(&lcd);
+        break;
+
+        
+    case MODE_WRITE:
+        break;
+    }
 }
 
 /**
@@ -54,17 +74,49 @@ void loop()
 void toggleMode()
 {
     mode = mode == MODE_READ ? MODE_WRITE : MODE_READ;
+    beep(1);
     lcd_idle(&lcd, mode);
 }
 
-/**
- * Helper routine to dump a byte array as hex values to Serial.
- */
-void dump_byte_array(byte *buffer, byte bufferSize)
+
+/****************************************************************************/
+
+void readCard()
 {
-    for (byte i = 0; i < bufferSize; i++)
-    {
-        Serial.print(buffer[i] < 0x10 ? " 0" : " ");
-        Serial.print(buffer[i], HEX);
-    }
+
+    // // Dump debug info about the card. PICC_HaltA() is automatically called.
+    // rfid.PICC_DumpToSerial(&(rfid.uid));
+}
+
+
+/****************************************************************************/
+
+void writeCard()
+{
+    // Look for new cards
+    if (!rfid.PICC_IsNewCardPresent())
+        return;
+
+    // Select one of the cards
+    if (!rfid.PICC_ReadCardSerial())
+        return;
+
+    // // Write data to the card
+    // byte block = 1;
+    // byte data[16] = {
+    //     0x01, 0x02, 0x03, 0x04,
+    //     0x05, 0x06, 0x07, 0x08,
+    //     0x08, 0x07, 0x06, 0x05,
+    //     0x04, 0x03, 0x02, 0x01
+    // };
+    // MFRC522::StatusCode status = rfid.MIFARE_Write(block, data, 16);
+    // if (status != MFRC522::STATUS_OK)
+    // {
+    //     Serial.print(F("MIFARE_Write() failed: "));
+    //     Serial.println(rfid.GetStatusCodeName(status));
+    // }
+    // else
+    // {
+    //     Serial.println(F("Write data to the card success"));
+    // }
 }
