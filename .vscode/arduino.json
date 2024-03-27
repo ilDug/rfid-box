@@ -1,6 +1,0 @@
-{
-    "sketch": "rfid-box.ino",
-    "output": "build",
-    "configuration": "cpu=atmega328",
-    "board": "arduino:avr:nano"
-}
