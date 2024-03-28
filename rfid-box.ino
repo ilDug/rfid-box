@@ -35,6 +35,20 @@ String value;   // Value read from the card as a string (ASCII) up to 16 bytes (
 String data;    // Data to write to the card
 String uid;     // UID of the card
 
+
+//Functions
+String readCard(byte block, byte len = 18);
+bool writeCard(byte block, String data);
+bool checkCompatibility();
+bool authenticateA(byte block);
+void toggleMode();
+void waitForReset();
+void beep(int n);
+void beep(int n, int duration);
+void beep(int n, int duration, int pause);
+
+/****************************************************************************/
+
 void setup()
 {
     Serial.begin(9600); // Initialize serial communications with the PC
@@ -66,11 +80,10 @@ void loop()
     if (!rfid.PICC_ReadCardSerial())
         return;
 
-
     /***********************************************************************/
 
-    fired = true; // mark that a card is detected
-    Serial.print(F("Card detected:")); // Show some details of the PICC (that is: the tag/card)
+    fired = true;                               // mark that a card is detected
+    Serial.print(F("Card detected:"));          // Show some details of the PICC (that is: the tag/card)
     rfid.PICC_DumpDetailsToSerial(&(rfid.uid)); // dump some details about the card
     Serial.println();
 
@@ -118,7 +131,7 @@ void loop()
         }
 
         bool result = writeCard(block, "Hello, World!");
-        if(result)
+        if (result)
             lcd_reading_result(&lcd, "Write success", "Hello, World!");
         waitForReset();
         break;
@@ -135,6 +148,20 @@ void toggleMode()
     lcd_idle(&lcd, mode);
 }
 
+// Reset the flag when the reset button is pressed
+void waitForReset()
+{
+    while (fired)
+    {
+        if (btnReset.pressed())
+            fired = false;
+        delay(100);
+    }
+    lcd_idle(&lcd, mode);
+}
+
+/****************************************************************************/
+/****************************************************************************/
 /****************************************************************************/
 
 /**
@@ -177,6 +204,8 @@ String readCard(byte block, byte len = 18)
     return value;
 }
 
+/****************************************************************************/
+/****************************************************************************/
 /****************************************************************************/
 /**
  * Write data to the card up to 16 bytes (16 characters) in a block (0-63 for MIFARE Classic 1K card)
@@ -229,6 +258,11 @@ bool writeCard(byte block, String data)
     return success;
 }
 
+
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
+
 // Check for card  compatibility
 bool checkCompatibility()
 {
@@ -243,6 +277,12 @@ bool checkCompatibility()
     else
         return true;
 }
+
+
+
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
 
 // Authenticate using key A
 bool authenticateA(byte block)
@@ -261,62 +301,5 @@ bool authenticateA(byte block)
         return true;
 }
 
-/**
- * Helper routine to dump a byte array as hex values to Serial.
- */
-void dump_byte_array(byte *buffer, byte bufferSize)
-{
-    for (byte i = 0; i < bufferSize; i++)
-    {
-        Serial.print(buffer[i] < 0x10 ? " 0" : " ");
-        Serial.print(buffer[i], HEX);
-    }
-}
 
-// Helper routine to convert a byte array (ASCII) to a string
-String bufferToString(byte *buffer, byte bufferSize)
-{
-    String str = "";
-    for (byte i = 0; i < bufferSize; i++)
-    {
-        if (buffer[i] != 0x00)
-            str += (char)buffer[i];
-    }
-    return str;
-}
 
-//  Helper routine to convert a string to a  byte array (ASCII)
-void stringToBuffer(String str, byte *buffer)
-{
-    // get the string length
-    byte bufferSize = str.length();
-
-    for (byte i = 0; i < bufferSize; i++)
-    {
-        buffer[i] = str[i];
-    }
-}
-
-// Helper routine to convert UID to a string
-String uidToString(MFRC522::Uid uid)
-{
-    String str = "";
-    for (byte i = 0; i < uid.size; i++)
-    {
-        str += (uid.uidByte[i] < 0x10 ? " 0" : " ");
-        str += uid.uidByte[i];
-    }
-    return str;
-}
-
-// Reset the flag when the reset button is pressed
-void waitForReset()
-{
-    while (fired)
-    {
-        if (btnReset.pressed())
-            fired = false;
-        delay(100);
-    }
-    lcd_idle(&lcd, mode);
-}
