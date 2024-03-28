@@ -16,8 +16,8 @@
 const int SS_PIN = 10;        // Slave Select Pin
 const int RST_PIN = 9;        // Reset Pin
 const int BZR_PIN = 0;        // Buzzer Pin
-const int BTN_MODE_PIN = 0;   // Mode Button Pin
-const int BTN_SELECT_PIN = 0; // Select Button Pin
+const int BTN_MODE_PIN = 2;   // Mode Button Pin
+const int BTN_RESET_PIN = 4; // Select Button Pin
 
 // RFID MODES
 enum Mode
@@ -28,25 +28,6 @@ enum Mode
 
 
 
-// fa suonare il Buzzer per 200 ms e attende 200 ms per un numero di volte passato come argomento
-// @param n numero di volte che il buzzer suona
-// @param duration durata del suono
-// @param pause pausa tra un suono e l'altro
-void beep(int n);
-void beep(int n, int duration);
-void beep(int n, int duration, int pause)
-{
-    if (!duration)
-        duration = 300;
-    if (!pause)
-        pause = duration;
-    for (int i = 0; i < n; i++)
-    {
-        digitalWrite(BZR_PIN, HIGH);
-        delay(duration);
-        digitalWrite(BZR_PIN, LOW);
-        delay(pause);
-    }
-}
+
 
 #endif

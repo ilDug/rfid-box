@@ -16,7 +16,7 @@
 
 // BUTTONS
 DagButton btnMode(BTN_MODE_PIN, PULLUP);
-DagButton btnReset(BTN_SELECT_PIN, PULLUP);
+DagButton btnReset(BTN_RESET_PIN, PULLUP);
 
 // RFID
 MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
@@ -29,11 +29,23 @@ String version = "v1.0.0"; // Version of the program
 bool fired = false;        //  flag to mark when a card is detected
 
 // First block of sector 1 (block 4) is used to store the user data up to 16 bytes
-byte block = 4; // Block number to read/write (0-63 for MIFARE Classic 1K card)
+byte block = 1; // Block number to read/write (0-63 for MIFARE Classic 1K card)
 byte len = 18;  // Length of the buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
 String value;   // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
-String data;    // Data to write to the card
+String data = "Hello World!";    // Data to write to the card
 String uid;     // UID of the card
+
+// Function prototypes
+void toggleMode();
+String readCard(byte block, byte len = 18);
+bool writeCard(byte block, String data);
+bool checkCompatibility();
+bool authenticateA(byte block);
+void dump_byte_array(byte *buffer, byte bufferSize);
+String bufferToString(byte *buffer, byte bufferSize);
+void stringToBuffer(String str, byte *buffer);
+String uidToString(MFRC522::Uid uid);
+void waitForReset();
 
 void setup()
 {
@@ -44,6 +56,7 @@ void setup()
     Serial.println("RFID Box " + version);
     Serial.println("Reader details:");
     rfid.PCD_DumpVersionToSerial(); // Show details of PCD - MFRC522 Card Reader details
+    Serial.println();
 
     // Prepare the key (used both for read and write) using FFFFFFFFFFFF hex value
     // for each byte of the key (6 bytes) [Factory default]
@@ -66,11 +79,10 @@ void loop()
     if (!rfid.PICC_ReadCardSerial())
         return;
 
-
     /***********************************************************************/
 
-    fired = true; // mark that a card is detected
-    Serial.print(F("Card detected:")); // Show some details of the PICC (that is: the tag/card)
+    fired = true;                               // mark that a card is detected
+    Serial.println(F("Card detected:"));          // Show some details of the PICC (that is: the tag/card)
     rfid.PICC_DumpDetailsToSerial(&(rfid.uid)); // dump some details about the card
     Serial.println();
 
@@ -100,6 +112,7 @@ void loop()
         // Read data from the card
         value = readCard(block, len);
 
+
         // Show the UID and the value read from the card
         if (value != "")
             lcd_reading_result(&lcd, uid, value);
@@ -118,12 +131,35 @@ void loop()
         }
 
         bool result = writeCard(block, "Hello, World!");
-        if(result)
+        if (result)
             lcd_reading_result(&lcd, "Write success", "Hello, World!");
         waitForReset();
         break;
     }
 }
+
+/****************************************************************************/
+
+// fa suonare il Buzzer per 200 ms e attende 200 ms per un numero di volte passato come argomento
+// @param n numero di volte che il buzzer suona
+// @param duration durata del suono
+// @param pause pausa tra un suono e l'altro
+void beep(int n, int duration = 300, int pause = 300)
+{
+    if (!duration)
+        duration = 300;
+    if (!pause)
+        pause = duration;
+    for (int i = 0; i < n; i++)
+    {
+        digitalWrite(BZR_PIN, HIGH);
+        delay(duration);
+        digitalWrite(BZR_PIN, LOW);
+        delay(pause);
+    }
+}
+
+/****************************************************************************/
 
 /**
  * switch between modes
@@ -133,6 +169,7 @@ void toggleMode()
     mode = mode == MODE_READ ? MODE_WRITE : MODE_READ;
     beep(1);
     lcd_idle(&lcd, mode);
+    Serial.println(mode == MODE_READ ? "Read mode" : "Write mode");
 }
 
 /****************************************************************************/
@@ -168,6 +205,8 @@ String readCard(byte block, byte len = 18)
     Serial.println(value);
     Serial.println();
 
+    // rfid.PICC_DumpToSerial(&(rfid.uid)); // dump some details about the card
+
     // Halt PICC
     rfid.PICC_HaltA();
     // Stop encryption on PCD
@@ -176,6 +215,8 @@ String readCard(byte block, byte len = 18)
     beep(1);
     return value;
 }
+
+
 
 /****************************************************************************/
 /**
@@ -229,6 +270,8 @@ bool writeCard(byte block, String data)
     return success;
 }
 
+/****************************************************************************/
+
 // Check for card  compatibility
 bool checkCompatibility()
 {
@@ -261,6 +304,8 @@ bool authenticateA(byte block)
         return true;
 }
 
+/****************************************************************************/
+
 /**
  * Helper routine to dump a byte array as hex values to Serial.
  */
@@ -272,6 +317,8 @@ void dump_byte_array(byte *buffer, byte bufferSize)
         Serial.print(buffer[i], HEX);
     }
 }
+
+/****************************************************************************/
 
 // Helper routine to convert a byte array (ASCII) to a string
 String bufferToString(byte *buffer, byte bufferSize)
@@ -285,6 +332,8 @@ String bufferToString(byte *buffer, byte bufferSize)
     return str;
 }
 
+/****************************************************************************/
+
 //  Helper routine to convert a string to a  byte array (ASCII)
 void stringToBuffer(String str, byte *buffer)
 {
@@ -297,6 +346,8 @@ void stringToBuffer(String str, byte *buffer)
     }
 }
 
+/****************************************************************************/
+
 // Helper routine to convert UID to a string
 String uidToString(MFRC522::Uid uid)
 {
@@ -308,6 +359,8 @@ String uidToString(MFRC522::Uid uid)
     }
     return str;
 }
+
+/****************************************************************************/
 
 // Reset the flag when the reset button is pressed
 void waitForReset()

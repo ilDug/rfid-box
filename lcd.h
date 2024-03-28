@@ -30,6 +30,9 @@ void lcd_idle(LCD_I2C *lcd, Mode mode)
     lcd->print("RFID " + modeStr + " MODE");
     lcd->setCursor(0, 1);
     lcd->print("Waiting card...");
+    
+    Serial.println("Waiting card...");
+    Serial.println();
 }
 
 void lcd_reading(LCD_I2C *lcd)
