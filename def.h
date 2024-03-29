@@ -2,7 +2,6 @@
 #define DAG_CONSTANTS_H
 
 #include <MFRC522.h>
-#include "data.h"
 
 /**
  * -----------------------------------------------------------------------------------------
@@ -16,11 +15,11 @@
  * SPI MISO    MISO         12 / ICSP-1   50        D12        ICSP-1           14
  * SPI SCK     SCK          13 / ICSP-3   52        D13        ICSP-3           15
  */
-const int SS_PIN = 10;       // Slave Select Pin
-const int RST_PIN = 9;       // Reset Pin
-const int BZR_PIN = 0;       // Buzzer Pin
-const int BTN_MODE_PIN = 2;  // Mode Button Pin
-const int BTN_RESET_PIN = 4; // Select Button Pin
+const int SS_PIN = 10;        // Slave Select Pin
+const int RST_PIN = 9;        // Reset Pin
+const int BZR_PIN = 0;        // Buzzer Pin
+const int BTN_MODE_PIN = 2;   // Mode Button Pin
+const int BTN_RESET_PIN = 4;  // Select Button Pin
 const int BTN_SELECT_PIN = 3; // Select Button Pin
 
 // RFID MODES
@@ -29,6 +28,44 @@ enum Mode
     MODE_READ,
     MODE_WRITE
 };
+
+// available block (16 bytes each) for writing
+// 16 bytes * 45 blocks = 720 bytes (~ 135 words)
+int blocks[] = {
+    4, 5, 6,    // sector 1
+    8, 9, 10,   // sector 2
+    12, 13, 14, // sector 3
+    16, 17, 18, // sector 4
+    20, 21, 22, // sector 5
+    24, 25, 26, // sector 6
+    28, 29, 30, // sector 7
+    32, 33, 34, // sector 8
+    36, 37, 38, // sector 9
+    40, 41, 42, // sector 10
+    44, 45, 46, // sector 11
+    48, 49, 50, // sector 12
+    52, 53, 54, // sector 13
+    56, 57, 58, // sector 14
+    60, 61, 62  // sector 15
+};
+
+// available sectors for writing (3 blocks each)
+//  16 bytes * 3 blocks = 48 bytes
+int sector1[] = {4, 5, 6};
+int sector2[] = {8, 9, 10};
+int sector3[] = {12, 13, 14};
+int sector4[] = {16, 17, 18};
+int sector5[] = {20, 21, 22};
+int sector6[] = {24, 25, 26};
+int sector7[] = {28, 29, 30};
+int sector8[] = {32, 33, 34};
+int sector9[] = {36, 37, 38};
+int sector10[] = {40, 41, 42};
+int sector11[] = {44, 45, 46};
+int sector12[] = {48, 49, 50};
+int sector13[] = {52, 53, 54};
+int sector14[] = {56, 57, 58};
+int sector15[] = {60, 61, 62};
 
 /****************************************************************************/
 
@@ -124,5 +161,7 @@ int nextBlock(int block, int limit = 64)
 
     return i >= len - 1 ? blocks[0] : blocks[i + 1];
 }
+
+/****************************************************************************/
 
 #endif
