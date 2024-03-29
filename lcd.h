@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <LCD_I2C.h>
 #include "def.h"
+
 /**
  * Inizializza il display LCD
  *
