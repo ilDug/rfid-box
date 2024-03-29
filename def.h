@@ -23,6 +23,10 @@ const int BTN_RESET_PIN = 4;  // Select Button Pin
 const int BTN_SELECT_PIN = 3; // Select Button Pin
 const int VALID_PIN = 5;      // Valid Pin
 
+
+byte cryptokey[MFRC522::MF_KEY_SIZE] = {0x01, 0x02, 0x13, 0x51, 0x09, 0x0F};// Key for reading and writing data to the card
+
+
 // RFID MODES
 enum Mode
 {

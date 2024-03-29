@@ -60,6 +60,7 @@ void setup()
     // for each byte of the key (6 bytes) [Factory default]
     for (byte i = 0; i < MFRC522::MF_KEY_SIZE; i++)
         key.keyByte[i] = 0xFF;
+        // key.keyByte[i] = cryptokey[i];
 
     lcd_init(&lcd, version);     // Initialize LCD
     lcd_idle(&lcd, mode, block); // Show idle message
