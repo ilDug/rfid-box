@@ -23,7 +23,6 @@ int blocks[] = {
     60, 61, 62 // sector 15
 };
 
-
 //available sectors for writing (3 blocks each)
 // 16 bytes * 3 blocks = 48 bytes
 int sector1[] = {4, 5, 6};
