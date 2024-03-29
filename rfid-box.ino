@@ -13,6 +13,7 @@
 #include "dag-timer.h"
 #include "def.h"
 #include "lcd.h"
+#include "data.h"
 
 // BUTTONS
 DagButton btnMode(BTN_MODE_PIN, PULLUP);
@@ -30,12 +31,11 @@ String version = "v1.0.0"; // Version of the program
 bool fired = false;        //  flag to mark when a card is detected
 
 // First block of sector 1 (block 4) is used to store the user data up to 16 bytes
-byte block = 4;               // Block number to read/write (0-63 for MIFARE Classic 1K card)
-byte limit = 4;               // Limit of blocks to read/write
-byte len = 18;                // Length of the buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
-String value;                 // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
-String data = "Hello World!"; // Data to write to the card
-String uid;                   // UID of the card
+byte block = 4; // Block number to read/write (0-63 for MIFARE Classic 1K card)
+byte limit = 4; // Limit of blocks to read/write
+byte len = 18;  // Length of the buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
+String value;   // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
+String uid;     // UID of the card
 
 // Function prototypes
 String readTag(byte block, byte len = 18);
@@ -46,6 +46,10 @@ void setup()
     Serial.begin(9600); // Initialize serial communications with the PC
     SPI.begin();        // Init SPI bus
     rfid.PCD_Init();    // Init MFRC522
+
+    // pinmode
+    pinMode(VALID_PIN, OUTPUT);
+    pinMode(BZR_PIN, OUTPUT);
 
     Serial.println("RFID Box " + version);
     Serial.println("Reader details:");
@@ -59,6 +63,7 @@ void setup()
 
     lcd_init(&lcd, version);     // Initialize LCD
     lcd_idle(&lcd, mode, block); // Show idle message
+    setValidOutput(false);       // Set the valid output to LOW as default
 }
 
 void loop()
@@ -94,9 +99,8 @@ void loop()
     case MODE_READ:
         lcd_reading(&lcd);
 
-
         // quando si tiene premuto il pulsante di reset, stampa al Serial monitor i dati di tutti i blocchi
-        if(btnReset.clicked())
+        if (btnReset.clicked())
         {
             readAllBlocks();
             return;
@@ -109,8 +113,12 @@ void loop()
             return;
         }
 
-        // Get the UID of the card
+        // Get the UID of the card as a string
         uid = uidToString(rfid.uid);
+
+        // Check if the UID is contained in the valid_uids array
+        bool valid = isValidUid(uid, valid_uids, valid_uids_len);
+        setValidOutput(valid);
 
         // Read data from the card
         value = readTag(block, len);
@@ -125,16 +133,20 @@ void loop()
     case MODE_WRITE:
         lcd_writing(&lcd);
 
-        // Authenticate using key A
-        if (!authenticateA(block))
+        for (int i = 0; i < PAYLOAD_SIZE; i++) // loop through the blocks to write
         {
-            waitForReset();
-            return;
+            // Authenticate using key A
+            if (!authenticateA(block))
+            {
+                waitForReset();
+                return;
+            }
+
+            bool result = writeTag(PAYLOAD[i].block, PAYLOAD[i].data); //   write data to the card
+            if (result)
+                lcd_reading_result(&lcd, "Write success", "on block " + String(PAYLOAD[i].block));
         }
 
-        bool result = writeTag(block, "Hello, World!");
-        if (result)
-            lcd_reading_result(&lcd, "Write success", "Hello, World!");
         waitForReset();
         break;
     }
@@ -154,6 +166,19 @@ void toggleMode()
     lcd_idle(&lcd, mode, block);
     Serial.println(mode == MODE_READ ? "Read mode" : "Write mode");
 }
+
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
+
+void setValidOutput(bool valid)
+{
+    if (valid)
+        digitalWrite(VALID_PIN, HIGH);
+    else
+        digitalWrite(VALID_PIN, LOW);
+}
+
 /****************************************************************************/
 /****************************************************************************/
 /****************************************************************************/
@@ -168,6 +193,7 @@ void waitForReset()
         delay(100);
     }
     lcd_idle(&lcd, mode, block);
+    setValidOutput(false);
 }
 /****************************************************************************/
 /****************************************************************************/

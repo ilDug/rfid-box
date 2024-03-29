@@ -21,6 +21,7 @@ const int BZR_PIN = 0;        // Buzzer Pin
 const int BTN_MODE_PIN = 2;   // Mode Button Pin
 const int BTN_RESET_PIN = 4;  // Select Button Pin
 const int BTN_SELECT_PIN = 3; // Select Button Pin
+const int VALID_PIN = 5;      // Valid Pin
 
 // RFID MODES
 enum Mode
@@ -163,5 +164,21 @@ int nextBlock(int block, int limit = 64)
 }
 
 /****************************************************************************/
+
+
+/**
+ * Check if th UID is contained into the list of valid UIDs
+*/
+bool isValidUid(String uid, MFRC522::Uid valid_uids[], int list_len)
+{
+    for (int i = 0; i < list_len; i++)
+    {
+        if (uid == uidToString(valid_uids[i]))
+            return true;
+    }
+    return false;
+}
+
+
 
 #endif
