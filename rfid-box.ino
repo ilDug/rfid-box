@@ -31,7 +31,7 @@ bool fired = false;        //  flag to mark when a card is detected
 
 // First block of sector 1 (block 4) is used to store the user data up to 16 bytes
 byte block = 4;               // Block number to read/write (0-63 for MIFARE Classic 1K card)
-byte limit = 4;              // Limit of blocks to read/write
+byte limit = 4;               // Limit of blocks to read/write
 byte len = 18;                // Length of the buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
 String value;                 // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
 String data = "Hello World!"; // Data to write to the card
@@ -40,8 +40,6 @@ String uid;                   // UID of the card
 // Function prototypes
 String readTag(byte block, byte len = 18);
 bool writeTag(byte block, String data);
-
-
 
 void setup()
 {
@@ -59,13 +57,13 @@ void setup()
     for (byte i = 0; i < MFRC522::MF_KEY_SIZE; i++)
         key.keyByte[i] = 0xFF;
 
-    lcd_init(&lcd, version); // Initialize LCD
-    lcd_idle(&lcd, mode, block);    // Show idle message
+    lcd_init(&lcd, version);     // Initialize LCD
+    lcd_idle(&lcd, mode, block); // Show idle message
 }
 
 void loop()
 {
-    btnMode.onPress(toggleMode); // Switch between read and write mode when button is pressed
+    btnMode.onPress(toggleMode);   // Switch between read and write mode when button is pressed
     btnSelect.onPress(loopBlocks); // increment block number when button is pressed
 
     // Look for new cards, else do nothing
@@ -95,6 +93,14 @@ void loop()
     {
     case MODE_READ:
         lcd_reading(&lcd);
+
+
+        // quando si tiene premuto il pulsante di reset, stampa al Serial monitor i dati di tutti i blocchi
+        if(btnReset.clicked())
+        {
+            readAllBlocks();
+            return;
+        }
 
         // Authenticate using key A
         if (!authenticateA(block))
@@ -167,7 +173,8 @@ void waitForReset()
 /****************************************************************************/
 /****************************************************************************/
 
-void loopBlocks(){
+void loopBlocks()
+{
     block = nextBlock(block, limit);
     lcd_idle(&lcd, mode, block);
 }
@@ -216,6 +223,15 @@ bool checkCompatibility()
 /****************************************************************************/
 /****************************************************************************/
 
+void readAllBlocks()
+{
+    rfid.PICC_DumpToSerial(&(rfid.uid)); // dump some details about the card
+}
+
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
+
 /**
  * Read data from the card
  * @param block block number to read (0-63 for MIFARE Classic 1K card)
@@ -246,8 +262,6 @@ String readTag(byte block, byte len = 18)
     value = bufferToString(buffer, len - 2); // convert the byte reading array to a string (ASCII)
     Serial.println(value);
     Serial.println();
-
-    // rfid.PICC_DumpToSerial(&(rfid.uid)); // dump some details about the card
 
     // Halt PICC
     rfid.PICC_HaltA();
