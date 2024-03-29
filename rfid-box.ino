@@ -178,6 +178,7 @@ void setValidOutput(bool valid)
         digitalWrite(VALID_PIN, HIGH);
     else
         digitalWrite(VALID_PIN, LOW);
+    Serial.println(valid ? "Valid card" : "Invalid card");
 }
 
 /****************************************************************************/
