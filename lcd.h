@@ -22,18 +22,19 @@ bool lcd_init(LCD_I2C *lcd, String version)
     return true;
 }
 
-void lcd_idle(LCD_I2C *lcd, Mode mode)
+void lcd_idle(LCD_I2C *lcd, Mode mode, int block)
 {
     String modeStr = mode == MODE_READ ? "READ" : "WRITE";
     lcd->clear();
     lcd->home();
-    lcd->print("RFID " + modeStr + " MODE");
+    lcd->print(modeStr + " Block " + block);
     lcd->setCursor(0, 1);
     lcd->print("Waiting card...");
     
-    Serial.println("Waiting card...");
+    Serial.println(modeStr + " Block " + block + ". Waiting card...");
     Serial.println();
 }
+
 
 void lcd_reading(LCD_I2C *lcd)
 {

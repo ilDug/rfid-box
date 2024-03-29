@@ -17,6 +17,7 @@
 // BUTTONS
 DagButton btnMode(BTN_MODE_PIN, PULLUP);
 DagButton btnReset(BTN_RESET_PIN, PULLUP);
+DagButton btnSelect(BTN_SELECT_PIN, PULLUP);
 
 // RFID
 MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
@@ -29,7 +30,8 @@ String version = "v1.0.0"; // Version of the program
 bool fired = false;        //  flag to mark when a card is detected
 
 // First block of sector 1 (block 4) is used to store the user data up to 16 bytes
-byte block = 1;               // Block number to read/write (0-63 for MIFARE Classic 1K card)
+byte block = 4;               // Block number to read/write (0-63 for MIFARE Classic 1K card)
+byte limit = 4;              // Limit of blocks to read/write
 byte len = 18;                // Length of the buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
 String value;                 // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
 String data = "Hello World!"; // Data to write to the card
@@ -58,12 +60,13 @@ void setup()
         key.keyByte[i] = 0xFF;
 
     lcd_init(&lcd, version); // Initialize LCD
-    lcd_idle(&lcd, mode);    // Show idle message
+    lcd_idle(&lcd, mode, block);    // Show idle message
 }
 
 void loop()
 {
     btnMode.onPress(toggleMode); // Switch between read and write mode when button is pressed
+    btnSelect.onPress(loopBlocks); // increment block number when button is pressed
 
     // Look for new cards, else do nothing
     if (!rfid.PICC_IsNewCardPresent())
@@ -142,9 +145,12 @@ void toggleMode()
 {
     mode = mode == MODE_READ ? MODE_WRITE : MODE_READ;
     beep(1);
-    lcd_idle(&lcd, mode);
+    lcd_idle(&lcd, mode, block);
     Serial.println(mode == MODE_READ ? "Read mode" : "Write mode");
 }
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
 
 // Reset the flag when the reset button is pressed
 void waitForReset()
@@ -155,8 +161,17 @@ void waitForReset()
             fired = false;
         delay(100);
     }
-    lcd_idle(&lcd, mode);
+    lcd_idle(&lcd, mode, block);
 }
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
+
+void loopBlocks(){
+    block = nextBlock(block, limit);
+    lcd_idle(&lcd, mode, block);
+}
+
 /****************************************************************************/
 /****************************************************************************/
 /****************************************************************************/

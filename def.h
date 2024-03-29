@@ -2,6 +2,7 @@
 #define DAG_CONSTANTS_H
 
 #include <MFRC522.h>
+#include "data.h"
 
 /**
  * -----------------------------------------------------------------------------------------
@@ -20,6 +21,7 @@ const int RST_PIN = 9;       // Reset Pin
 const int BZR_PIN = 0;       // Buzzer Pin
 const int BTN_MODE_PIN = 2;  // Mode Button Pin
 const int BTN_RESET_PIN = 4; // Select Button Pin
+const int BTN_SELECT_PIN = 3; // Select Button Pin
 
 // RFID MODES
 enum Mode
@@ -77,7 +79,6 @@ void stringToBuffer(String str, byte *buffer)
     }
 }
 
-
 /****************************************************************************/
 
 // Helper routine to convert a byte array (ASCII) to a string
@@ -106,5 +107,22 @@ void dump_byte_array(byte *buffer, byte bufferSize)
     }
 }
 
+/****************************************************************************/
+/**
+ * Select block to write data
+ */
+int nextBlock(int block, int limit = 64)
+{
+    int len = sizeof(blocks) / sizeof(blocks[0]);
+    int i = 0;
+    while (block != blocks[i])
+    {
+        i++;
+        if (i >= len || i >= limit)
+            break;
+    }
+
+    return i >= len - 1 ? blocks[0] : blocks[i + 1];
+}
 
 #endif
