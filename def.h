@@ -164,7 +164,7 @@ int nextBlock(int block, int limit = 64)
             break;
     }
 
-    return i >= len - 1 ? blocks[0] : blocks[i + 1];
+    return (i >= len - 1 || i>= limit) ? blocks[0] : blocks[i + 1];
 }
 
 /****************************************************************************/

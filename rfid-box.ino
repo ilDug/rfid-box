@@ -164,11 +164,13 @@ void loop()
                 Serial.println("Write failed");
             }
         }
-                // Halt PICC
+
+        // Halt PICC
         rfid.PICC_HaltA();
         // Stop encryption on PCD
         rfid.PCD_StopCrypto1();
 
+        beep(1, 1000);
 
         waitForReset();
     }
@@ -199,7 +201,6 @@ void setValidOutput(bool valid)
         digitalWrite(VALID_PIN, HIGH);
     else
         digitalWrite(VALID_PIN, LOW);
-    Serial.println(valid ? "Valid card" : "Invalid card");
 }
 
 /****************************************************************************/
@@ -364,7 +365,6 @@ bool writeTag(byte block, String data)
         {
             Serial.println(F("Write data to the card success"));
             success = true;
-            beep(1);
         }
     }
 
