@@ -60,7 +60,7 @@ void setup()
     // for each byte of the key (6 bytes) [Factory default]
     for (byte i = 0; i < MFRC522::MF_KEY_SIZE; i++)
         key.keyByte[i] = 0xFF;
-        // key.keyByte[i] = cryptokey[i];
+    // key.keyByte[i] = cryptokey[i];
 
     lcd_init(&lcd, version);     // Initialize LCD
     lcd_idle(&lcd, mode, block); // Show idle message
@@ -95,9 +95,9 @@ void loop()
     }
 
     // Read data from the card
-    switch (mode)
+    if (mode == MODE_READ)
     {
-    case MODE_READ:
+
         lcd_reading(&lcd);
 
         // quando si tiene premuto il pulsante di reset, stampa al Serial monitor i dati di tutti i blocchi
@@ -123,33 +123,54 @@ void loop()
 
         // Read data from the card
         value = readTag(block, len);
+        // Halt PICC
+        rfid.PICC_HaltA();
+        // Stop encryption on PCD
+        rfid.PCD_StopCrypto1();
 
         // Show the UID and the value read from the card
         if (value != "")
             lcd_reading_result(&lcd, uid, value);
 
         waitForReset();
-        break;
+    }
 
-    case MODE_WRITE:
+    else if (mode == MODE_WRITE)
+    {
         lcd_writing(&lcd);
+        Serial.println("Write mode switched on");
 
-        for (int i = 0; i < PAYLOAD_SIZE; i++) // loop through the blocks to write
+        for (int k = 0; k < PAYLOAD_SIZE; k++) // loop through the blocks to write
         {
+            Serial.println("Block " + String(PAYLOAD[k].block) + " - Data: " + PAYLOAD[k].data);
+
             // Authenticate using key A
-            if (!authenticateA(block))
+            if (!authenticateA(PAYLOAD[k].block))
             {
                 waitForReset();
                 return;
             }
+            delay(100);
 
-            bool result = writeTag(PAYLOAD[i].block, PAYLOAD[i].data); //   write data to the card
+            bool result = writeTag(PAYLOAD[k].block, PAYLOAD[k].data); //   write data to the card
             if (result)
-                lcd_reading_result(&lcd, "Write success", "on block " + String(PAYLOAD[i].block));
+            {
+                lcd_reading_result(&lcd, "Write success", "on block " + String(PAYLOAD[k].block));
+                Serial.println("Write success on block " + String(PAYLOAD[k].block));
+            }
+            else
+            {
+                lcd_reading_error(&lcd, "Write failed");
+                Serial.println("Write failed");
+            }
         }
+                // Halt PICC
+        rfid.PICC_HaltA();
+        // Stop encryption on PCD
+        rfid.PCD_StopCrypto1();
+
 
         waitForReset();
-        break;
     }
 }
 
@@ -165,7 +186,7 @@ void toggleMode()
     mode = mode == MODE_READ ? MODE_WRITE : MODE_READ;
     beep(1);
     lcd_idle(&lcd, mode, block);
-    Serial.println(mode == MODE_READ ? "Read mode" : "Write mode");
+    Serial.println(mode == MODE_READ ? "Read mode selected" : "Write mode selected");
 }
 
 /****************************************************************************/
@@ -205,6 +226,7 @@ void loopBlocks()
 {
     block = nextBlock(block, limit);
     lcd_idle(&lcd, mode, block);
+    Serial.println("Block selected " + String(block));
 }
 
 /****************************************************************************/
@@ -291,10 +313,10 @@ String readTag(byte block, byte len = 18)
     Serial.println(value);
     Serial.println();
 
-    // Halt PICC
-    rfid.PICC_HaltA();
-    // Stop encryption on PCD
-    rfid.PCD_StopCrypto1();
+    // // Halt PICC
+    // rfid.PICC_HaltA();
+    // // Stop encryption on PCD
+    // rfid.PCD_StopCrypto1();
 
     beep(1);
     return value;
@@ -346,10 +368,10 @@ bool writeTag(byte block, String data)
         }
     }
 
-    // Halt PICC
-    rfid.PICC_HaltA();
-    // Stop encryption on PCD
-    rfid.PCD_StopCrypto1();
+    // // Halt PICC
+    // rfid.PICC_HaltA();
+    // // Stop encryption on PCD
+    // rfid.PCD_StopCrypto1();
 
     return success;
 }

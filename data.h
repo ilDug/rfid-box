@@ -7,8 +7,8 @@
 // A struct used for passing data to the reader
 typedef struct
 {
-    byte block;  // block number.
-    String data; // data to write
+    byte  block;  // block number.
+    String  data; // data to write
 } DB;
 
 /************************************************/
