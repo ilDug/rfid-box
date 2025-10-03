@@ -38,8 +38,18 @@ public:
     // esegue la funzione passata come argomento allo scoccare del periodo
     void run(void (*fun)(void));
 
-    // per i timer non ripetitivi, indica se è scoccato almeno una volta, continuando a mantenere lo stato TRUE anche nei loop successivi 
+    // in termini assoluti, indica se è scoccato almeno una volta, continuando a mantenere lo stato TRUE anche nei loop successivi
     bool exhausted();
 };
+
+// Esempio di utilizzo NON RIPETITIVO (LOOP = false):
+// DURATION:   ---------------- [X] ----------------------------------
+// CLOCK:      ----[F]----    ----[T]----    ----[F]----   ----[F]----
+// EXHAUSTED:  ----[F]----    ----[T]----    ----[T]----   ----[T]----
+
+// Esempio di utilizzo RIPETITIVO (LOOP = true):
+// DURATION:   ---------------- [X] ---------------------------------- [X] --------------------------------------
+// CLOCK:      ----[F]----    ----[T]----    ----[F]----   ----[F]----    ----[T]----    ----[F]----   ----[F]----
+// EXHAUSTED:  ----[F]----    ----[T]----    ----[T]----   ----[T]----    ----[T]----    ----[T]----   ----[T]----
 
 #endif
