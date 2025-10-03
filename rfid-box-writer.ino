@@ -18,12 +18,11 @@
 // BUTTONS
 DagButton btnMode(BTN_MODE_PIN, PULLUP);
 DagButton btnReset(BTN_RESET_PIN, PULLUP);
-DagButton btnSelect(BTN_SELECT_PIN, PULLUP);
 
 // RFID
 MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
 MFRC522::MIFARE_Key key;       // Key for the read and write
-Mode mode = MODE_READ;
+Mode mode = MODE_READ;          // Current mode (MODE_READ or MODE_WRITE)
 
 // LCD
 LCD_I2C lcd(0x27, 16, 2);  // SDA => A4: SCL => A5
@@ -44,12 +43,13 @@ bool writeTag(byte block, String data);
 void setup()
 {
     Serial.begin(9600); // Initialize serial communications with the PC
-    SPI.begin();        // Init SPI bus
+    SPI.begin();        // Init SPI bus for MFRC522
     rfid.PCD_Init();    // Init MFRC522
 
     // pinmode
-    pinMode(VALID_PIN, OUTPUT);
-    pinMode(BZR_PIN, OUTPUT);
+    pinMode(ACTION_PIN, OUTPUT);
+    pinMode(ALARM_PIN, OUTPUT);
+    pinMode(ERROR_PIN, OUTPUT);
 
     Serial.println("RFID Box " + version);
     Serial.println("Reader details:");
@@ -62,15 +62,14 @@ void setup()
         key.keyByte[i] = 0xFF;
     // key.keyByte[i] = cryptokey[i];
 
-    lcd_init(&lcd, version);     // Initialize LCD
-    lcd_idle(&lcd, mode, block); // Show idle message
-    setValidOutput(false);       // Set the valid output to LOW as default
+    //lcd_init(&lcd, version);     // Initialize LCD
+    //lcd_idle(&lcd, mode, block); // Show idle message
+    setActionStatus(false);       // Set the valid output to LOW as default
 }
 
 void loop()
 {
     btnMode.onPress(toggleMode);   // Switch between read and write mode when button is pressed
-    btnSelect.onPress(loopBlocks); // increment block number when button is pressed
 
     // Look for new cards, else do nothing
     if (!rfid.PICC_IsNewCardPresent())
@@ -81,6 +80,7 @@ void loop()
         return;
 
     /***********************************************************************/
+    // quando una carta è stata letta con successo
 
     fired = true;                               // mark that a card is detected
     Serial.println(F("Card detected:"));        // Show some details of the PICC (that is: the tag/card)
@@ -90,17 +90,20 @@ void loop()
     // check card compatibility
     if (!checkCompatibility())
     {
-        waitForReset();
+        if (mode == MODE_WRITE)
+            setErrorStatus(true); // set the error pin to HIGH only in write mode
+            waitForReset();  // wait until the reset button is pressed only in write mode
         return;
     }
 
+    // ------------------------------------------------------------------------
     // Read data from the card
     if (mode == MODE_READ)
     {
 
-        lcd_reading(&lcd);
+        // lcd_reading(&lcd);
 
-        // quando si tiene premuto il pulsante di reset, stampa al Serial monitor i dati di tutti i blocchi
+        // quando si tiene premuto il pulsante di reset durante la lettura, stampa al Serial monitor i dati di tutti i blocchi
         if (btnReset.clicked())
         {
             readAllBlocks();
@@ -110,16 +113,14 @@ void loop()
         // Authenticate using key A
         if (!authenticateA(block))
         {
-            waitForReset();
+            if (mode == MODE_WRITE)
+                setErrorStatus(true); // set the error pin to HIGH only in write mode
+                waitForReset();
             return;
         }
 
         // Get the UID of the card as a string
         uid = uidToString(rfid.uid);
-
-        // Check if the UID is contained in the valid_uids array
-        bool valid = isValidUid(uid, valid_uids, valid_uids_len);
-        setValidOutput(valid);
 
         // Read data from the card
         value = readTag(block, len);
@@ -132,9 +133,11 @@ void loop()
         if (value != "")
             lcd_reading_result(&lcd, uid, value);
 
-        waitForReset();
+        if (mode == MODE_WRITE)
+            waitForReset(); // wait until the reset button is pressed only in write mode
     }
 
+    // ------------------------------------------------------------------------
     else if (mode == MODE_WRITE)
     {
         lcd_writing(&lcd);
@@ -187,7 +190,7 @@ void toggleMode()
 {
     mode = mode == MODE_READ ? MODE_WRITE : MODE_READ;
     beep(1);
-    lcd_idle(&lcd, mode, block);
+    //lcd_idle(&lcd, mode, block);
     Serial.println(mode == MODE_READ ? "Read mode selected" : "Write mode selected");
 }
 
@@ -195,12 +198,27 @@ void toggleMode()
 /****************************************************************************/
 /****************************************************************************/
 
-void setValidOutput(bool valid)
+/**
+ * imposta il pin di output che segnala se il tag è valido o meno
+ */
+void setActionStatus(bool valid)
 {
     if (valid)
-        digitalWrite(VALID_PIN, HIGH);
+        digitalWrite(ACTION_PIN, HIGH);
     else
-        digitalWrite(VALID_PIN, LOW);
+        digitalWrite(ACTION_PIN, LOW);
+}
+
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
+
+void setErrorStatus(bool error)
+{
+    if (error)
+        digitalWrite(ERROR_PIN, HIGH);
+    else
+        digitalWrite(ERROR_PIN, LOW);
 }
 
 /****************************************************************************/
@@ -213,11 +231,12 @@ void waitForReset()
     while (fired)
     {
         if (btnReset.pressed())
-            fired = false;
+            fired = false; // reset the flag
+            setErrorStatus(false); // reset the error pin
         delay(100);
     }
-    lcd_idle(&lcd, mode, block);
-    setValidOutput(false);
+    // lcd_idle(&lcd, mode, block);
+    setActionStatus(false);
 }
 /****************************************************************************/
 /****************************************************************************/
@@ -243,7 +262,7 @@ bool authenticateA(byte block)
     {
         Serial.print(F("Authentication failed: "));
         Serial.println(rfid.GetStatusCodeName(status));
-        lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
+        //lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
         beep(3);
         return false;
     }
@@ -274,6 +293,7 @@ bool checkCompatibility()
 /****************************************************************************/
 /****************************************************************************/
 
+// Read and dump all details of the card to Serial Monitor
 void readAllBlocks()
 {
     rfid.PICC_DumpToSerial(&(rfid.uid)); // dump some details about the card
@@ -300,7 +320,8 @@ String readTag(byte block, byte len = 18)
     {
         Serial.print(F("Reading failed: "));
         Serial.println(rfid.GetStatusCodeName(status));
-        lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
+        //lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
+        beep(3);
         value = "";
     }
 
@@ -313,11 +334,6 @@ String readTag(byte block, byte len = 18)
     value = bufferToString(buffer, len - 2); // convert the byte reading array to a string (ASCII)
     Serial.println(value);
     Serial.println();
-
-    // // Halt PICC
-    // rfid.PICC_HaltA();
-    // // Stop encryption on PCD
-    // rfid.PCD_StopCrypto1();
 
     beep(1);
     return value;

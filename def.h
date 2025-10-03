@@ -4,6 +4,10 @@
 #include <MFRC522.h>
 
 /**
+ * Pin definitions for the MFRC522
+ * Using Hardware SPI of Arduino 
+ *  MOSI (11), MISO (12) and SCK (13) are fixed 
+ *  configure SS and RST Pins only
  * -----------------------------------------------------------------------------------------
  *             MFRC522      Arduino       Arduino   Arduino    Arduino          Arduino
  *             Reader/PCD   Uno/101       Mega      Nano v3    Leonardo/Micro   Pro Micro
@@ -15,14 +19,18 @@
  * SPI MISO    MISO         12 / ICSP-1   50        D12        ICSP-1           14
  * SPI SCK     SCK          13 / ICSP-3   52        D13        ICSP-3           15
  */
-const int SS_PIN = 10;        // Slave Select Pin
-const int RST_PIN = 9;        // Reset Pin
-const int BZR_PIN = 0;        // Buzzer Pin
-const int BTN_MODE_PIN = 2;   // Mode Button Pin
-const int BTN_RESET_PIN = 4;  // Select Button Pin
-const int BTN_SELECT_PIN = 3; // Select Button Pin
-const int VALID_PIN = 5;      // Valid Pin
+const int SS_PIN = 10;        // RFID Slave Select Pin
+const int RST_PIN = 9;        // RFID Reset Pin
 
+const int BTN_MODE_PIN = 5;   // Mode Button Pin
+const int BTN_RESET_PIN = 4;  // Reset Button Pin
+
+const int ACTION_PIN = 2;      // Action Pin
+const int ALARM_PIN = 6;       // Alarm Pin
+const int ERROR_PIN = 3;       // Error Pin
+
+const int SIGNAL1_PIN = A1;    // Signal1 Pin
+const int SIGNAL2_PIN = A2;    // Signal2 Pin
 
 byte cryptokey[MFRC522::MF_KEY_SIZE] = {0x01, 0x02, 0x13, 0x51, 0x09, 0x0F};// Key for reading and writing data to the card
 
@@ -74,7 +82,7 @@ int sector15[] = {60, 61, 62};
 
 /****************************************************************************/
 
-// fa suonare il Buzzer per 200 ms e attende 200 ms per un numero di volte passato come argomento
+// fa suonare il Buzzer per 300 ms e attende 300 ms per un numero di volte passato come argomento
 // @param n numero di volte che il buzzer suona
 // @param duration durata del suono
 // @param pause pausa tra un suono e l'altro
@@ -86,9 +94,9 @@ void beep(int n, int duration = 300, int pause = 300)
         pause = duration;
     for (int i = 0; i < n; i++)
     {
-        digitalWrite(BZR_PIN, HIGH);
+        digitalWrite(ALARM_PIN, HIGH);
         delay(duration);
-        digitalWrite(BZR_PIN, LOW);
+        digitalWrite(ALARM_PIN, LOW);
         delay(pause);
     }
 }
@@ -168,21 +176,6 @@ int nextBlock(int block, int limit = 64)
 }
 
 /****************************************************************************/
-
-
-/**
- * Check if th UID is contained into the list of valid UIDs
-*/
-bool isValidUid(String uid, MFRC522::Uid valid_uids[], int list_len)
-{
-    for (int i = 0; i < list_len; i++)
-    {
-        if (uid == uidToString(valid_uids[i]))
-            return true;
-    }
-    return false;
-}
-
 
 
 #endif
