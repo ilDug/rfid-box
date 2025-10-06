@@ -31,9 +31,11 @@ bool fired = false;        //  flag to mark when a card is detected
 
 // First block of sector 1 (block 4) is used to store the user data up to 16 bytes
 byte block = 4; // Block number to read/write (0-63 for MIFARE Classic 1K card)
-byte limit = 4; // Limit of blocks to read/write
+byte limit = 3; // Limit of blocks to read/write
+
 byte len = 18;  // Length of the buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
 String value;   // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
+String passphrase = ""; // Passphrase stored to eeprom
 String uid;     // UID of the card
 
 // Function prototypes
@@ -54,6 +56,9 @@ void setup()
     Serial.println("RFID Box " + version);
     Serial.println("Reader details:");
     rfid.PCD_DumpVersionToSerial(); // Show details of PCD - MFRC522 Card Reader details
+    Serial.println("reading passphrase from eeprom...");
+    loadPayloadFromEEPROM(&passphrase);
+    Serial.println("Passphrase: " + passphrase);
     Serial.println();
 
     // Prepare the key (used both for read and write) using FFFFFFFFFFFF hex value
@@ -64,7 +69,7 @@ void setup()
 
     //lcd_init(&lcd, version);     // Initialize LCD
     //lcd_idle(&lcd, mode, block); // Show idle message
-    setActionStatus(false);       // Set the valid output to LOW as default
+    openSesame(false); // Set the valid output to LOW as default
 }
 
 void loop()
@@ -84,15 +89,13 @@ void loop()
 
     fired = true;                               // mark that a card is detected
     Serial.println(F("Card detected:"));        // Show some details of the PICC (that is: the tag/card)
-    rfid.PICC_DumpDetailsToSerial(&(rfid.uid)); // dump some details about the card
     Serial.println();
 
     // check card compatibility
     if (!checkCompatibility())
     {
         if (mode == MODE_WRITE)
-            setErrorStatus(true); // set the error pin to HIGH only in write mode
-            waitForReset();  // wait until the reset button is pressed only in write mode
+            triggerErrorAndWaitForReset(btnReset, fired); // wait until the reset button is pressed only in write mode
         return;
     }
 
@@ -100,41 +103,33 @@ void loop()
     // Read data from the card
     if (mode == MODE_READ)
     {
-
         // lcd_reading(&lcd);
 
         // quando si tiene premuto il pulsante di reset durante la lettura, stampa al Serial monitor i dati di tutti i blocchi
         if (btnReset.clicked())
         {
-            readAllBlocks();
+            rfid.PICC_DumpToSerial(&(rfid.uid)); // dump some details about the card
             return;
         }
 
         // Authenticate using key A
         if (!authenticateA(block))
-        {
-            if (mode == MODE_WRITE)
-                setErrorStatus(true); // set the error pin to HIGH only in write mode
-                waitForReset();
             return;
-        }
 
-        // Get the UID of the card as a string
-        uid = uidToString(rfid.uid);
-
+        // reset the value
+        value = "";
         // Read data from the card
         value = readTag(block, len);
+        // Get the UID of the card as a string
+        uid = uidToString(rfid.uid);
         // Halt PICC
         rfid.PICC_HaltA();
         // Stop encryption on PCD
         rfid.PCD_StopCrypto1();
 
         // Show the UID and the value read from the card
-        if (value != "")
-            lcd_reading_result(&lcd, uid, value);
-
-        if (mode == MODE_WRITE)
-            waitForReset(); // wait until the reset button is pressed only in write mode
+        // if (value != "")
+        //     lcd_reading_result(&lcd, uid, value);
     }
 
     // ------------------------------------------------------------------------
@@ -150,7 +145,7 @@ void loop()
             // Authenticate using key A
             if (!authenticateA(PAYLOAD[k].block))
             {
-                waitForReset();
+                triggerErrorAndWaitForReset(btnReset, fired); // wait until the reset button is pressed
                 return;
             }
             delay(100);
@@ -175,7 +170,7 @@ void loop()
 
         beep(1, 1000);
 
-        waitForReset();
+        triggerErrorAndWaitForReset(btnReset, fired); // wait until the reset button is pressed
     }
 }
 
@@ -198,56 +193,12 @@ void toggleMode()
 /****************************************************************************/
 /****************************************************************************/
 
-/**
- * imposta il pin di output che segnala se il tag è valido o meno
- */
-void setActionStatus(bool valid)
-{
-    if (valid)
-        digitalWrite(ACTION_PIN, HIGH);
-    else
-        digitalWrite(ACTION_PIN, LOW);
-}
-
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-
-void setErrorStatus(bool error)
-{
-    if (error)
-        digitalWrite(ERROR_PIN, HIGH);
-    else
-        digitalWrite(ERROR_PIN, LOW);
-}
-
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-
-// Reset the flag when the reset button is pressed
-void waitForReset()
-{
-    while (fired)
-    {
-        if (btnReset.pressed())
-            fired = false; // reset the flag
-            setErrorStatus(false); // reset the error pin
-        delay(100);
-    }
-    // lcd_idle(&lcd, mode, block);
-    setActionStatus(false);
-}
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-
-void loopBlocks()
-{
-    block = nextBlock(block, limit);
-    lcd_idle(&lcd, mode, block);
-    Serial.println("Block selected " + String(block));
-}
+// void loopBlocks()
+// {
+//     block = nextBlock(block, limit);
+//     lcd_idle(&lcd, mode, block);
+//     Serial.println("Block selected " + String(block));
+// }
 
 /****************************************************************************/
 /****************************************************************************/
@@ -287,16 +238,6 @@ bool checkCompatibility()
     }
     else
         return true;
-}
-
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-
-// Read and dump all details of the card to Serial Monitor
-void readAllBlocks()
-{
-    rfid.PICC_DumpToSerial(&(rfid.uid)); // dump some details about the card
 }
 
 /****************************************************************************/

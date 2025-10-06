@@ -2,11 +2,12 @@
 #define DAG_CONSTANTS_H
 
 #include <MFRC522.h>
+#include <EEPROM.h>
 
 /**
  * Pin definitions for the MFRC522
- * Using Hardware SPI of Arduino 
- *  MOSI (11), MISO (12) and SCK (13) are fixed 
+ * Using Hardware SPI of Arduino
+ *  MOSI (11), MISO (12) and SCK (13) are fixed
  *  configure SS and RST Pins only
  * -----------------------------------------------------------------------------------------
  *             MFRC522      Arduino       Arduino   Arduino    Arduino          Arduino
@@ -19,21 +20,20 @@
  * SPI MISO    MISO         12 / ICSP-1   50        D12        ICSP-1           14
  * SPI SCK     SCK          13 / ICSP-3   52        D13        ICSP-3           15
  */
-const int SS_PIN = 10;        // RFID Slave Select Pin
-const int RST_PIN = 9;        // RFID Reset Pin
+const int SS_PIN = 10; // RFID Slave Select Pin
+const int RST_PIN = 9; // RFID Reset Pin
 
-const int BTN_MODE_PIN = 5;   // Mode Button Pin
-const int BTN_RESET_PIN = 4;  // Reset Button Pin
+const int BTN_MODE_PIN = 5;  // Mode Button Pin
+const int BTN_RESET_PIN = 4; // Reset Button Pin
 
-const int ACTION_PIN = 2;      // Action Pin
-const int ALARM_PIN = 6;       // Alarm Pin
-const int ERROR_PIN = 3;       // Error Pin
+const int ACTION_PIN = 2; // Action Pin
+const int ALARM_PIN = 6;  // Alarm Pin
+const int ERROR_PIN = 3;  // Error Pin
 
-const int SIGNAL1_PIN = A1;    // Signal1 Pin
-const int SIGNAL2_PIN = A2;    // Signal2 Pin
+const int SIGNAL1_PIN = A1; // Signal1 Pin
+const int SIGNAL2_PIN = A2; // Signal2 Pin
 
-byte cryptokey[MFRC522::MF_KEY_SIZE] = {0x01, 0x02, 0x13, 0x51, 0x09, 0x0F};// Key for reading and writing data to the card
-
+byte cryptokey[MFRC522::MF_KEY_SIZE] = {0x01, 0x02, 0x13, 0x51, 0x09, 0x0F}; // Key for reading and writing data to the card
 
 // RFID MODES
 enum Mode
@@ -41,6 +41,19 @@ enum Mode
     MODE_READ,
     MODE_WRITE
 };
+
+enum Agent
+{
+    AGENT_READER,
+    AGENT_WRITER
+};
+
+// A struct used for passing data to the reader
+typedef struct
+{
+    int block;     // block number.
+    char data[16]; // data to write
+} DB;
 
 // available block (16 bytes each) for writing
 // 16 bytes * 45 blocks = 720 bytes (~ 135 words)
@@ -172,10 +185,101 @@ int nextBlock(int block, int limit = 64)
             break;
     }
 
-    return (i >= len - 1 || i>= limit) ? blocks[0] : blocks[i + 1];
+    return (i >= len - 1 || i >= limit) ? blocks[0] : blocks[i + 1];
 }
 
 /****************************************************************************/
 
+/**
+ * save PAYLOAD to EEPROM
+ */
+void savePayloadToEEPROM(DB *payload)
+{
+    // Clear all EEPROM
+    for (int i = 0; i < EEPROM.length(); i++)
+    {
+        EEPROM.write(i, 0);
+    }
+
+    // Write new data
+    int k = 0;
+    for (int i = 0; i < payload.length(); i++)
+    {
+        String data = payload[i].data;
+
+        // Write the data to the specified block in EEPROM
+        for (int j = 0; j < data.length(); j++)
+        {
+            EEPROM.write(k, data[j]);
+            k++;
+        }
+    }
+}
+
+/****************************************************************************/
+
+/**
+ * load PAYLOAD from EEPROM
+ */
+void loadPayloadFromEEPROM(String *passphrase)
+{
+    // Read data from EEPROM
+    int i = 0;
+    while (i < EEPROM.length())
+    {
+        char c = EEPROM.read(i);
+        if (c == 0)
+            break; // stop if null character is found
+
+        (*passphrase) += c;
+        i++;
+    }
+}
+
+/****************************************************************************/
+
+/**
+ * Aziona il relay e fa suonare il beep per un periodo di tempo specificato
+ */
+void openSesame(bool valid, int duration = 500)
+{
+    if (valid)
+    {
+        digitalWrite(ACTION_PIN, HIGH); // Attiva il pin di azione
+        digitalWrite(ALARM_PIN, HIGH);  // Attiva il pin di allarme
+
+        // Se è specificata una durata, attiva il pin per quel periodo
+        if (duration > 0)
+        {
+            delay(duration);
+            digitalWrite(ACTION_PIN, LOW); // Disattiva il pin di azione
+            digitalWrite(ALARM_PIN, LOW);  // Disattiva il pin di allarme
+        }
+    }
+    else // disattiva entrambi i pin quando non valido
+    {
+        digitalWrite(ACTION_PIN, LOW);
+        digitalWrite(ALARM_PIN, LOW);
+    }
+}
+
+/****************************************************************************/
+
+// trigger the error pin and wait for the reset button to be pressed
+void triggerErrorAndWaitForReset(DagButton *btn, bool fired)
+{
+    digitalWrite(ERROR_PIN, HIGH); // set the error pin to HIGH
+    while (fired)
+    {
+        if (btn->pressed())
+        {
+            fired = false;                // reset the flag
+            digitalWrite(ERROR_PIN, LOW); // reset the error pin
+        }
+        delay(100);
+    }
+    // lcd_idle(&lcd, mode, block);
+    openSesame(false);
+}
 
 #endif
