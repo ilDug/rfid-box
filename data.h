@@ -9,15 +9,7 @@
 /*** max 16 caratteri per blocco      */
 /************************************************/
 
-
-// Example usage:
-DB examplePayload[3] = {
-    {4, "Fei5thum1phuThe"},
-    {5, "iim4nae6phah3oh"},
-    {6, "eedee8tha7um1aS"}
-};
-
-int PAYLOAD_SIZE = 3;
+String mainPassphrase = "soJ0ijae1yee2yohChoop6ieshohrex5eeVuk7Cooghiu5She5OhpaingaicheG5"; // main passphrase (max 135 characters)
 /************************************************/
 
 #endif

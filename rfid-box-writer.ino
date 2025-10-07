@@ -139,23 +139,12 @@ void loop()
             return;
         }
 
-        lcd_writing(&lcd);
+        // lcd_writing(&lcd);
         Serial.println("Write mode switched on");
-
-        // Concatenate all PAYLOAD data into a single string
-        String dataToWrite = "";
-        for (int k = 0; k < PAYLOAD_SIZE; k++)
-        {
-            dataToWrite += examplePayload[k].data;
-            Serial.println("Adding payload " + String(k) + " - Data: " + String(examplePayload[k].data));
-        }
-
-        Serial.println("Complete data to write: " + dataToWrite);
-        Serial.println();
 
         // Write all data using the new writeTag function
         int blocksCount = sizeof(blocks) / sizeof(blocks[0]);
-        bool result = writeTag(dataToWrite, blocks, blocksCount);
+        bool result = writeTag(&passphrase, blocks, blocksCount);
         if (result)
         {
             // lcd_reading_result(&lcd, "Write success", "All blocks written");
@@ -326,13 +315,13 @@ String readTag(int *blocksArray, int blocksCount)
  * @param blocksCount number of blocks in the array
  * @return true if all blocks were written successfully, false if any error occurred
  */
-bool writeTag(String data, int *blocksArray, int blocksCount)
+bool writeTag(String *data, int *blocksArray, int blocksCount)
 {
-    int dataLength = data.length();
+    int dataLength = data->length();
     int dataIndex = 0;
 
     Serial.println(F("Writing data to all blocks..."));
-    Serial.println("Data to write: " + data);
+    Serial.println("Data to write: " + *data);
     Serial.println("Data length: " + String(dataLength));
     Serial.println();
 
@@ -349,7 +338,7 @@ bool writeTag(String data, int *blocksArray, int blocksCount)
         {
             if (dataIndex < dataLength)
             {
-                buffer[j] = data[dataIndex];
+                buffer[j] = (*data)[dataIndex];
                 dataIndex++;
             }
             else
@@ -445,6 +434,7 @@ bool writeTag(String data, int *blocksArray, int blocksCount)
 /****************************************************************************/
 /****************************************************************************/
 /****************************************************************************/
+
 /**
  * Write data to the card up to 16 bytes (16 characters) in a block (0-63 for MIFARE Classic 1K card)
  * @param block block number to write (0-63 for MIFARE Classic 1K card)

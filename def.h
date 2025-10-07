@@ -48,13 +48,6 @@ enum Agent
     AGENT_WRITER
 };
 
-// A struct used for passing data to the reader
-typedef struct
-{
-    int block;     // block number.
-    char data[16]; // data to write
-} DB;
-
 // available block (16 bytes each) for writing
 // 16 bytes * 45 blocks = 720 bytes (~ 135 words)
 int blocks[] = {
@@ -193,48 +186,114 @@ int nextBlock(int block, int limit = 64)
 
 /**
  * save PAYLOAD to EEPROM
+ * @param payload pointer to String containing the data to save
+ * @return true if save was successful, false if data was too large
  */
-void savePayloadToEEPROM(DB *payload)
+bool savePayloadToEEPROM(String *payload)
 {
-    // Clear all EEPROM
-    for (int i = 0; i < EEPROM.length(); i++)
+    // Check if payload is null
+    if (payload == nullptr)
+    {
+        Serial.println("Error: Null payload pointer");
+        return false;
+    }
+
+    // Check if data fits in EEPROM
+    int dataLength = payload->length();
+    int maxEEPROMSize = EEPROM.length();
+
+    if (dataLength >= maxEEPROMSize)
+    {
+        Serial.println("Error: Payload too large for EEPROM (" + String(dataLength) + " bytes, max " + String(maxEEPROMSize - 1) + ")");
+        return false;
+    }
+
+    Serial.println("Saving " + String(dataLength) + " bytes to EEPROM...");
+
+    // Clear all EEPROM (optional optimization: only clear what we need)
+    for (int i = 0; i < maxEEPROMSize; i++)
     {
         EEPROM.write(i, 0);
     }
 
-    // Write new data
-    int k = 0;
-    for (int i = 0; i < payload.length(); i++)
+    // Write new data directly - much more efficient
+    for (int i = 0; i < dataLength; i++)
     {
-        String data = payload[i].data;
+        char c = payload->charAt(i);
 
-        // Write the data to the specified block in EEPROM
-        for (int j = 0; j < data.length(); j++)
+        // Optional: validate character (only save printable ASCII)
+        if (c >= 32 && c <= 126)
         {
-            EEPROM.write(k, data[j]);
-            k++;
+            EEPROM.write(i, c);
+        }
+        else
+        {
+            Serial.println("Warning: Non-printable character at position " + String(i) + ", skipping");
+            EEPROM.write(i, '?'); // Replace with placeholder
         }
     }
+
+    // Ensure null termination
+    if (dataLength < maxEEPROMSize)
+    {
+        EEPROM.write(dataLength, 0);
+    }
+
+    // Optional: commit changes if using ESP32/ESP8266
+    // EEPROM.commit();
+
+    Serial.println("Successfully saved " + String(dataLength) + " bytes to EEPROM");
+    return true;
 }
 
 /****************************************************************************/
 
 /**
  * load PAYLOAD from EEPROM
+ * @param payload pointer to String where the loaded data will be stored
  */
-void loadPayloadFromEEPROM(String *passphrase)
+void loadPayloadFromEEPROM(String *payload)
 {
-    // Read data from EEPROM
+    // Clear the payload string first
+    *payload = "";
+
+    // Read data from EEPROM with safety limits
     int i = 0;
-    while (i < EEPROM.length())
+    int maxLength = min(EEPROM.length(), 512); // Limit to reasonable size (512 bytes max)
+
+    while (i < maxLength)
     {
         char c = EEPROM.read(i);
-        if (c == 0)
-            break; // stop if null character is found
 
-        (*passphrase) += c;
+        // Stop if null character is found
+        if (c == 0)
+            break;
+
+        // Only add printable ASCII characters (32-126) to avoid corrupted data
+        if (c >= 32 && c <= 126)
+        {
+            (*payload) += c;
+        }
+        else
+        {
+            // If we encounter non-printable character, it might be corrupted data
+            // Stop reading to avoid garbage
+            Serial.println("Warning: Non-printable character found in EEPROM at position " + String(i));
+            break;
+        }
+
         i++;
+
+        // Additional safety: stop if string gets too long
+        if (payload->length() > 500)
+        {
+            Serial.println("Warning: EEPROM data too long, truncating at 500 characters");
+            break;
+        }
     }
+
+    // Debug output
+    Serial.println("Loaded " + String(payload->length()) + " characters from EEPROM");
 }
 
 /****************************************************************************/
