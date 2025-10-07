@@ -29,18 +29,13 @@ LCD_I2C lcd(0x27, 16, 2);  // SDA => A4: SCL => A5
 String version = "v1.0.0"; // Version of the program
 bool fired = false;        //  flag to mark when a card is detected
 
-// First block of sector 1 (block 4) is used to store the user data up to 16 bytes
-byte block = 4; // Block number to read/write (0-63 for MIFARE Classic 1K card)
-byte limit = 3; // Limit of blocks to read/write
-
-byte len = 18;  // Length of the buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
 String value;   // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
 String passphrase = ""; // Passphrase stored to eeprom
 String uid;     // UID of the card
 
 // Function prototypes
-String readTag(byte block, byte len = 18);
-bool writeTag(byte block, String data);
+String readTag(int *blocksArray, int blocksCount);
+bool writeTag(String data, int *blocksArray, int blocksCount);
 
 void setup()
 {
@@ -91,14 +86,6 @@ void loop()
     Serial.println(F("Card detected:"));        // Show some details of the PICC (that is: the tag/card)
     Serial.println();
 
-    // check card compatibility
-    if (!checkCompatibility())
-    {
-        if (mode == MODE_WRITE)
-            triggerErrorAndWaitForReset(btnReset, fired); // wait until the reset button is pressed only in write mode
-        return;
-    }
-
     // ------------------------------------------------------------------------
     // Read data from the card
     if (mode == MODE_READ)
@@ -112,20 +99,29 @@ void loop()
             return;
         }
 
-        // Authenticate using key A
-        if (!authenticateA(block))
-            return;
-
         // reset the value
         value = "";
-        // Read data from the card
-        value = readTag(block, len);
+        // Read data from all blocks in the blocks array
+        int blocksCount = sizeof(blocks) / sizeof(blocks[0]);
+        value = readTag(blocks, blocksCount);
+
+        // Handle beep signals based on readTag result
+        if (value == "")
+        {
+            beep(3); // error beep if reading failed or no data was read
+        }
+        else
+        {
+            beep(1); // success beep if data was read successfully
+        }
+
         // Get the UID of the card as a string
         uid = uidToString(rfid.uid);
+
         // Halt PICC
-        rfid.PICC_HaltA();
+        // rfid.PICC_HaltA();
         // Stop encryption on PCD
-        rfid.PCD_StopCrypto1();
+        // rfid.PCD_StopCrypto1();
 
         // Show the UID and the value read from the card
         // if (value != "")
@@ -135,38 +131,46 @@ void loop()
     // ------------------------------------------------------------------------
     else if (mode == MODE_WRITE)
     {
+        // check card compatibility
+        if (!checkCompatibility())
+        {
+            if (mode == MODE_WRITE)
+                triggerErrorAndWaitForReset(btnReset, fired); // wait until the reset button is pressed only in write mode
+            return;
+        }
+
         lcd_writing(&lcd);
         Serial.println("Write mode switched on");
 
-        for (int k = 0; k < PAYLOAD_SIZE; k++) // loop through the blocks to write
+        // Concatenate all PAYLOAD data into a single string
+        String dataToWrite = "";
+        for (int k = 0; k < PAYLOAD_SIZE; k++)
         {
-            Serial.println("Block " + String(PAYLOAD[k].block) + " - Data: " + PAYLOAD[k].data);
+            dataToWrite += examplePayload[k].data;
+            Serial.println("Adding payload " + String(k) + " - Data: " + String(examplePayload[k].data));
+        }
 
-            // Authenticate using key A
-            if (!authenticateA(PAYLOAD[k].block))
-            {
-                triggerErrorAndWaitForReset(btnReset, fired); // wait until the reset button is pressed
-                return;
-            }
-            delay(100);
+        Serial.println("Complete data to write: " + dataToWrite);
+        Serial.println();
 
-            bool result = writeTag(PAYLOAD[k].block, PAYLOAD[k].data); //   write data to the card
-            if (result)
-            {
-                lcd_reading_result(&lcd, "Write success", "on block " + String(PAYLOAD[k].block));
-                Serial.println("Write success on block " + String(PAYLOAD[k].block));
-            }
-            else
-            {
-                lcd_reading_error(&lcd, "Write failed");
-                Serial.println("Write failed");
-            }
+        // Write all data using the new writeTag function
+        int blocksCount = sizeof(blocks) / sizeof(blocks[0]);
+        bool result = writeTag(dataToWrite, blocks, blocksCount);
+        if (result)
+        {
+            // lcd_reading_result(&lcd, "Write success", "All blocks written");
+            Serial.println("Write operation completed successfully");
+        }
+        else
+        {
+            // lcd_reading_error(&lcd, "Write failed");
+            Serial.println("Write operation failed");
         }
 
         // Halt PICC
-        rfid.PICC_HaltA();
+        // rfid.PICC_HaltA();
         // Stop encryption on PCD
-        rfid.PCD_StopCrypto1();
+        // rfid.PCD_StopCrypto1();
 
         beep(1, 1000);
 
@@ -193,17 +197,6 @@ void toggleMode()
 /****************************************************************************/
 /****************************************************************************/
 
-// void loopBlocks()
-// {
-//     block = nextBlock(block, limit);
-//     lcd_idle(&lcd, mode, block);
-//     Serial.println("Block selected " + String(block));
-// }
-
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-
 // Authenticate using key A
 bool authenticateA(byte block)
 {
@@ -213,8 +206,7 @@ bool authenticateA(byte block)
     {
         Serial.print(F("Authentication failed: "));
         Serial.println(rfid.GetStatusCodeName(status));
-        //lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
-        beep(3);
+        // lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
         return false;
     }
     else
@@ -232,8 +224,7 @@ bool checkCompatibility()
     if (piccType != MFRC522::PICC_TYPE_MIFARE_MINI && piccType != MFRC522::PICC_TYPE_MIFARE_1K && piccType != MFRC522::PICC_TYPE_MIFARE_4K)
     {
         Serial.println(F("This device only works with MIFARE Classic cards."));
-        lcd_reading_error(&lcd, "Card not supported");
-        beep(3);
+        // lcd_reading_error(&lcd, "Card not supported");
         return false;
     }
     else
@@ -245,39 +236,210 @@ bool checkCompatibility()
 /****************************************************************************/
 
 /**
- * Read data from the card
- * @param block block number to read (0-63 for MIFARE Classic 1K card)
- * @param sector sector number to read  (0-15 for MIFARE Classic 1K card)
- * @param len length of the buffer to store the data read
- * @return value read from the card as a string
+ * Read data from all blocks defined in the blocks array
+ * @param blocksArray pointer to the array of blocks to read
+ * @param blocksCount number of blocks in the array
+ * @return concatenated value read from all blocks as a string
  */
-String readTag(byte block, byte len = 18)
+String readTag(int *blocksArray, int blocksCount)
 {
-    byte buffer[len]; // buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
-    String value;     // value read from the card
+    byte len = 18;          // Length of the buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
+    String finalValue = ""; // final concatenated value from all blocks
 
-    MFRC522::StatusCode status = rfid.MIFARE_Read(block, buffer, &len);
-    if (status != MFRC522::STATUS_OK)
+    Serial.println(F("Reading data from all blocks..."));
+    Serial.println();
+
+    for (int i = 0; i < blocksCount; i++)
     {
-        Serial.print(F("Reading failed: "));
-        Serial.println(rfid.GetStatusCodeName(status));
-        //lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
-        beep(3);
-        value = "";
+        byte currentBlock = blocksArray[i];
+        byte buffer[len];       // buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
+        String blockValue = ""; // value read from current block
+
+        // Authenticate for each block
+        if (!authenticateA(currentBlock))
+        {
+            Serial.println("CRITICAL ERROR: Authentication failed for block " + String(currentBlock));
+            Serial.println("Stopping read operation due to authentication failure.");
+            Serial.println();
+            return ""; // return empty string to indicate failure
+        }
+
+        MFRC522::StatusCode status = rfid.MIFARE_Read(currentBlock, buffer, &len);
+        if (status != MFRC522::STATUS_OK)
+        {
+            Serial.print(F("CRITICAL ERROR: Reading failed on block "));
+            Serial.print(currentBlock);
+            Serial.print(F(": "));
+            Serial.println(rfid.GetStatusCodeName(status));
+            Serial.println("Stopping read operation due to read failure.");
+            Serial.println();
+            // lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
+            return ""; // return empty string to indicate failure
+        }
+        else
+        {
+            Serial.print(F("Data in block "));
+            Serial.print(currentBlock);
+            Serial.println(F(":"));
+            dump_byte_array(buffer, len - 2); // dump the data read from the card to the serial monitor
+            Serial.println();
+
+            blockValue = bufferToString(buffer, len - 2); // convert the byte reading array to a string (ASCII)
+            Serial.println("Block " + String(currentBlock) + " content: " + blockValue);
+            Serial.println();
+
+            // Check if the block value is empty/null - if so, stop reading
+            if (blockValue.length() == 0 || blockValue.trim().length() == 0)
+            {
+                Serial.println("Found empty block " + String(currentBlock) + ", stopping read operation.");
+                Serial.println();
+                break; // terminate the reading loop
+            }
+
+            // Concatenate the block value to the final string
+            finalValue += blockValue;
+        }
     }
 
-    Serial.print(F("Data in block "));
-    Serial.print(block); //  print the block number to the serial monitor
-    Serial.println(F(":"));
-    dump_byte_array(buffer, len - 2); // dump the data read from the card to the serial monitor
+    // Trim whitespace from the beginning and end of finalValue
+    finalValue.trim();
+
+    Serial.println("Final concatenated value: " + finalValue);
     Serial.println();
 
-    value = bufferToString(buffer, len - 2); // convert the byte reading array to a string (ASCII)
-    Serial.println(value);
+    // Halt PICC
+    rfid.PICC_HaltA();
+    // Stop encryption on PCD
+    rfid.PCD_StopCrypto1();
+
+    return finalValue;
+}
+
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
+
+/**
+ * Write data to all blocks defined in the blocks array
+ * @param data String to write to the tag (will be distributed across multiple blocks)
+ * @param blocksArray pointer to the array of blocks to write
+ * @param blocksCount number of blocks in the array
+ * @return true if all blocks were written successfully, false if any error occurred
+ */
+bool writeTag(String data, int *blocksArray, int blocksCount)
+{
+    int dataLength = data.length();
+    int dataIndex = 0;
+
+    Serial.println(F("Writing data to all blocks..."));
+    Serial.println("Data to write: " + data);
+    Serial.println("Data length: " + String(dataLength));
     Serial.println();
 
-    beep(1);
-    return value;
+    for (int i = 0; i < blocksCount; i++)
+    {
+        byte currentBlock = blocksArray[i];
+        byte buffer[16]; // buffer to store the data to write to the card (16 bytes per block)
+
+        // Clear the buffer
+        memset(buffer, 0x00, 16);
+
+        // Fill buffer with data or nulls
+        for (int j = 0; j < 16; j++)
+        {
+            if (dataIndex < dataLength)
+            {
+                buffer[j] = data[dataIndex];
+                dataIndex++;
+            }
+            else
+            {
+                buffer[j] = 0x00; // null bytes for remaining space
+            }
+        }
+
+        // Authenticate for each block
+        if (!authenticateA(currentBlock))
+        {
+            Serial.println("CRITICAL ERROR: Authentication failed for block " + String(currentBlock));
+            Serial.println("Stopping write operation due to authentication failure.");
+            Serial.println();
+            return false; // return false to indicate failure
+        }
+
+        // Write data to the card
+        MFRC522::StatusCode status = rfid.MIFARE_Write(currentBlock, buffer, 16);
+        if (status != MFRC522::STATUS_OK)
+        {
+            Serial.print(F("CRITICAL ERROR: Writing failed on block "));
+            Serial.print(currentBlock);
+            Serial.print(F(": "));
+            Serial.println(rfid.GetStatusCodeName(status));
+            Serial.println("Stopping write operation due to write failure.");
+            Serial.println();
+            return false; // return false to indicate failure
+        }
+        else
+        {
+            Serial.print(F("Successfully wrote to block "));
+            Serial.print(currentBlock);
+            Serial.print(F(" - Data: "));
+
+            // Print the data written to this block
+            String blockData = "";
+            for (int k = 0; k < 16; k++)
+            {
+                if (buffer[k] != 0x00)
+                    blockData += (char)buffer[k];
+            }
+            Serial.println(blockData);
+        }
+
+        // If we've written all the data and the rest would be nulls, we can stop
+        if (dataIndex >= dataLength)
+        {
+            Serial.println("All data written successfully. Remaining blocks will be cleared.");
+            Serial.println();
+
+            // Continue to clear remaining blocks with null values
+            for (int remainingBlock = i + 1; remainingBlock < blocksCount; remainingBlock++)
+            {
+                byte nullBuffer[16];
+                memset(nullBuffer, 0x00, 16);
+
+                if (!authenticateA(blocksArray[remainingBlock]))
+                {
+                    Serial.println("CRITICAL ERROR: Authentication failed for clearing block " + String(blocksArray[remainingBlock]));
+                    return false;
+                }
+
+                MFRC522::StatusCode clearStatus = rfid.MIFARE_Write(blocksArray[remainingBlock], nullBuffer, 16);
+                if (clearStatus != MFRC522::STATUS_OK)
+                {
+                    Serial.print(F("CRITICAL ERROR: Failed to clear block "));
+                    Serial.print(blocksArray[remainingBlock]);
+                    Serial.print(F(": "));
+                    Serial.println(rfid.GetStatusCodeName(clearStatus));
+                    return false;
+                }
+                else
+                {
+                    Serial.println("Cleared block " + String(blocksArray[remainingBlock]));
+                }
+            }
+            break;
+        }
+    }
+
+    // Halt PICC
+    rfid.PICC_HaltA();
+    // Stop encryption on PCD
+    rfid.PCD_StopCrypto1();
+
+    Serial.println("Write operation completed successfully.");
+    Serial.println();
+
+    return true; // return true to indicate success
 }
 
 /****************************************************************************/
@@ -289,46 +451,46 @@ String readTag(byte block, byte len = 18)
  * @param data string to write to the card
  * @return void
  * */
-bool writeTag(byte block, String data)
-{
-    bool success = true;
-    byte l = data.length(); // length of the data to write
+// bool writeTagObsolete(byte block, String data)
+// {
+//     bool success = true;
+//     byte l = data.length(); // length of the data to write
 
-    if (l > 16) // check if the data is more than 16 bytes
-    {
-        Serial.println(F("Data too long. Maximum length is 16 bytes"));
-        lcd_reading_error(&lcd, "Data too long. Maximum length is 16 bytes");
-        beep(3);
-        success = false;
-    }
-    else
-    {
-        for (byte i = l; i < 16; i++)
-            data += " ";              // pad the buffer with spaces if the data is less than 16 bytes
-        byte buffer[16];              // buffer to store the data to write to the card
-        stringToBuffer(data, buffer); // convert the string to a byte array (ASCII)
+//     if (l > 16) // check if the data is more than 16 bytes
+//     {
+//         Serial.println(F("Data too long. Maximum length is 16 bytes"));
+//         lcd_reading_error(&lcd, "Data too long. Maximum length is 16 bytes");
+//         beep(3);
+//         success = false;
+//     }
+//     else
+//     {
+//         for (byte i = l; i < 16; i++)
+//             data += " ";              // pad the buffer with spaces if the data is less than 16 bytes
+//         byte buffer[16];              // buffer to store the data to write to the card
+//         stringToBuffer(data, buffer); // convert the string to a byte array (ASCII)
 
-        // Write data to the card
-        MFRC522::StatusCode status = rfid.MIFARE_Write(block, buffer, 16);
-        if (status != MFRC522::STATUS_OK)
-        {
-            Serial.print(F("MIFARE_Write() failed: "));
-            Serial.println(rfid.GetStatusCodeName(status));
-            lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
-            beep(3);
-            success = false;
-        }
-        else
-        {
-            Serial.println(F("Write data to the card success"));
-            success = true;
-        }
-    }
+//         // Write data to the card
+//         MFRC522::StatusCode status = rfid.MIFARE_Write(block, buffer, 16);
+//         if (status != MFRC522::STATUS_OK)
+//         {
+//             Serial.print(F("MIFARE_Write() failed: "));
+//             Serial.println(rfid.GetStatusCodeName(status));
+//             lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
+//             beep(3);
+//             success = false;
+//         }
+//         else
+//         {
+//             Serial.println(F("Write data to the card success"));
+//             success = true;
+//         }
+//     }
 
-    // // Halt PICC
-    // rfid.PICC_HaltA();
-    // // Stop encryption on PCD
-    // rfid.PCD_StopCrypto1();
+//     // // Halt PICC
+//     // rfid.PICC_HaltA();
+//     // // Stop encryption on PCD
+//     // rfid.PCD_StopCrypto1();
 
-    return success;
-}
+//     return success;
+// }

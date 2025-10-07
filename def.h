@@ -95,10 +95,12 @@ int sector15[] = {60, 61, 62};
 
 /****************************************************************************/
 
-// fa suonare il Buzzer per 300 ms e attende 300 ms per un numero di volte passato come argomento
-// @param n numero di volte che il buzzer suona
-// @param duration durata del suono
-// @param pause pausa tra un suono e l'altro
+// @brief Generates a series of beeps using the ALARM_PIN.
+// The function produces a sequence of beeps by toggling the ALARM_PIN between HIGH and LOW.
+// The number of beeps, duration of each beep, and pause between beeps can be customized.
+// @param n The number of beeps to generate.
+// @param duration The duration of each beep in milliseconds. Defaults to 300ms.
+// @param pause The duration of the pause between beeps in milliseconds. Defaults to the same value as duration.
 void beep(int n, int duration = 300, int pause = 300)
 {
     if (!duration)
@@ -158,9 +160,7 @@ String bufferToString(byte *buffer, byte bufferSize)
 
 /****************************************************************************/
 
-/**
- * Helper routine to dump a byte array as hex values to Serial.
- */
+// Helper routine to dump a byte array to serial monitor
 void dump_byte_array(byte *buffer, byte bufferSize)
 {
     for (byte i = 0; i < bufferSize; i++)
@@ -171,9 +171,10 @@ void dump_byte_array(byte *buffer, byte bufferSize)
 }
 
 /****************************************************************************/
-/**
- * Select block to write data
- */
+// Get the next block number from the blocks array
+// @param block current block number
+// @param limit limit the search to the first 'limit' blocks
+// @return next block number
 int nextBlock(int block, int limit = 64)
 {
     int len = sizeof(blocks) / sizeof(blocks[0]);
@@ -238,9 +239,13 @@ void loadPayloadFromEEPROM(String *passphrase)
 
 /****************************************************************************/
 
-/**
- * Aziona il relay e fa suonare il beep per un periodo di tempo specificato
- */
+// @brief Activates or deactivates action and alarm pins based on validity, with an optional duration.
+// If the input 'valid' is true, this function activates both the action and alarm pins (HIGH).
+// If a 'duration' is specified (greater than 0), the pins remain active for that duration (in milliseconds)
+// before being deactivated (LOW). If 'valid' is false, both action and alarm pins are immediately deactivated.
+// @param valid Boolean indicating whether to activate the pins (true) or deactivate them (false).
+// @param duration Optional duration (in milliseconds) for which the pins should remain active. Default is 500ms. If 0, the pins will remain active until manually deactivated.
+// @note ACTION_PIN and ALARM_PIN must be defined elsewhere in the code.
 void openSesame(bool valid, int duration = 500)
 {
     if (valid)
@@ -265,7 +270,13 @@ void openSesame(bool valid, int duration = 500)
 
 /****************************************************************************/
 
-// trigger the error pin and wait for the reset button to be pressed
+// @brief Triggers an error state by setting the ERROR_PIN high and waits for a button press to reset.
+// This function sets the ERROR_PIN to HIGH, indicating an error state. It then enters a loop,
+// waiting for a button press. When the specified button is pressed, the error state is cleared
+// by setting the ERROR_PIN to LOW, and the loop terminates. Additionally, it calls openSesame(false)
+// to perform any necessary actions related to closing or deactivating a mechanism.
+// @param btn A pointer to the DagButton object that triggers the reset.
+// @param fired A boolean flag indicating whether the error has been initially triggered. The loop continues as long as this flag is true.
 void triggerErrorAndWaitForReset(DagButton *btn, bool fired)
 {
     digitalWrite(ERROR_PIN, HIGH); // set the error pin to HIGH
