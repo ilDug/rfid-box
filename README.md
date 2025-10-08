@@ -8,7 +8,7 @@ Arduino project for read/write rfid tags
 
 `FORCE BUTTON`: contatto diretto al relay senza passare dal controllore.
 
-`MODE BUTTON`: se premuto cambia il **MODE** tra _READ_ e _WRITE_. 
+`MODE BUTTON`: se premuto cambia il **MODE** tra _READ_ e _WRITE_. Se lo sistene premuto per più di 3 secondi cambia il **JOB** tra _RUN_ e _SET_.
 
 `RESET BUTTON`: 
 -   Quando si legge/scrive un tag, il programma si blocca. Per eseguire una nuova operazione, premere questo pulsante. 

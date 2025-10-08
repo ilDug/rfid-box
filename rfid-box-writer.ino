@@ -22,7 +22,10 @@ DagButton btnReset(BTN_RESET_PIN, PULLUP);
 // RFID
 MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
 MFRC522::MIFARE_Key key;       // Key for the read and write
+
 Mode mode = MODE_READ;          // Current mode (MODE_READ or MODE_WRITE)
+Job job = RUN;                  // Current job (RUN or SET)
+Agent agent = AGENT_WRITER;     // Current agent (AGENT_READER or AGENT_WRITER)
 
 // LCD
 LCD_I2C lcd(0x27, 16, 2);  // SDA => A4: SCL => A5
@@ -36,6 +39,7 @@ String uid;     // UID of the card
 // Function prototypes
 String readTag(int *blocksArray, int blocksCount);
 bool writeTag(String data, int *blocksArray, int blocksCount);
+void executeAction(bool valid);
 
 void setup()
 {
@@ -64,14 +68,15 @@ void setup()
 
     //lcd_init(&lcd, version);     // Initialize LCD
     //lcd_idle(&lcd, mode, block); // Show idle message
-    openSesame(false); // Set the valid output to LOW as default
+    executeAction(false); // Set the valid output to LOW as default
 }
 
 void loop()
 {
     btnMode.onPress(toggleMode);   // Switch between read and write mode when button is pressed
+    btnMode.onLongPress(toggleJob, 3000); // Switch between RUN and SET job when button is long pressed for 3 seconds
 
-    // Look for new cards, else do nothing
+        // Look for new cards, else do nothing
     if (!rfid.PICC_IsNewCardPresent())
         return;
 
@@ -90,6 +95,13 @@ void loop()
     // Read data from the card
     if (mode == MODE_READ)
     {
+        // check card compatibility
+        if (!checkCompatibility())
+        {
+            triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed only in write mode
+            return;
+        }
+
         // lcd_reading(&lcd);
 
         // quando si tiene premuto il pulsante di reset durante la lettura, stampa al Serial monitor i dati di tutti i blocchi
@@ -99,33 +111,30 @@ void loop()
             return;
         }
 
-        // reset the value
-        value = "";
-        // Read data from all blocks in the blocks array
-        int blocksCount = sizeof(blocks) / sizeof(blocks[0]);
-        value = readTag(blocks, blocksCount);
+        value = "";                                           // reset the value
+        int blocksCount = sizeof(blocks) / sizeof(blocks[0]); // calculate the number of blocks in the array
+        value = readTag(blocks, blocksCount);                 // Read all blocks listed in the blocks array
 
         // Handle beep signals based on readTag result
         if (value == "")
         {
             beep(3); // error beep if reading failed or no data was read
+            triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed
         }
         else
         {
-            beep(1); // success beep if data was read successfully
+            beep(1, 600);        // success beep if data was read successfully
+            executeAction(true); // set the valid output to HIGH
         }
 
         // Get the UID of the card as a string
-        uid = uidToString(rfid.uid);
+        // uid = uidToString(rfid.uid);
+        // lcd_reading_result(&lcd, uid, value);
 
         // Halt PICC
         // rfid.PICC_HaltA();
         // Stop encryption on PCD
         // rfid.PCD_StopCrypto1();
-
-        // Show the UID and the value read from the card
-        // if (value != "")
-        //     lcd_reading_result(&lcd, uid, value);
     }
 
     // ------------------------------------------------------------------------
@@ -134,8 +143,7 @@ void loop()
         // check card compatibility
         if (!checkCompatibility())
         {
-            if (mode == MODE_WRITE)
-                triggerErrorAndWaitForReset(btnReset, fired); // wait until the reset button is pressed only in write mode
+            triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed only in write mode
             return;
         }
 
@@ -163,7 +171,7 @@ void loop()
 
         beep(1, 1000);
 
-        triggerErrorAndWaitForReset(btnReset, fired); // wait until the reset button is pressed
+        triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed
     }
 }
 
@@ -180,6 +188,18 @@ void toggleMode()
     beep(1);
     //lcd_idle(&lcd, mode, block);
     Serial.println(mode == MODE_READ ? "Read mode selected" : "Write mode selected");
+}
+
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
+// switch between JOBS
+void toggleJob()
+{
+    job = job == RUN ? SET : RUN;
+    beep(5);
+    // lcd_idle(&lcd, mode, block);
+    Serial.println(job == RUN ? "Job: RUN" : "Job: SET");
 }
 
 /****************************************************************************/
@@ -435,52 +455,51 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
 /****************************************************************************/
 /****************************************************************************/
 
-/**
- * Write data to the card up to 16 bytes (16 characters) in a block (0-63 for MIFARE Classic 1K card)
- * @param block block number to write (0-63 for MIFARE Classic 1K card)
- * @param data string to write to the card
- * @return void
- * */
-// bool writeTagObsolete(byte block, String data)
-// {
-//     bool success = true;
-//     byte l = data.length(); // length of the data to write
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
 
-//     if (l > 16) // check if the data is more than 16 bytes
-//     {
-//         Serial.println(F("Data too long. Maximum length is 16 bytes"));
-//         lcd_reading_error(&lcd, "Data too long. Maximum length is 16 bytes");
-//         beep(3);
-//         success = false;
-//     }
-//     else
-//     {
-//         for (byte i = l; i < 16; i++)
-//             data += " ";              // pad the buffer with spaces if the data is less than 16 bytes
-//         byte buffer[16];              // buffer to store the data to write to the card
-//         stringToBuffer(data, buffer); // convert the string to a byte array (ASCII)
+// Function to execute action based on validity
+// Definire la funzione in base al lavoro che si deve fare
+void executeAction(bool valid)
+{
+    if (valid)
+    {
+        // TO DO
+    }
+    else
+    {
+        // TO DO
+    }
+}
 
-//         // Write data to the card
-//         MFRC522::StatusCode status = rfid.MIFARE_Write(block, buffer, 16);
-//         if (status != MFRC522::STATUS_OK)
-//         {
-//             Serial.print(F("MIFARE_Write() failed: "));
-//             Serial.println(rfid.GetStatusCodeName(status));
-//             lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
-//             beep(3);
-//             success = false;
-//         }
-//         else
-//         {
-//             Serial.println(F("Write data to the card success"));
-//             success = true;
-//         }
-//     }
+/****************************************************************************/
 
-//     // // Halt PICC
-//     // rfid.PICC_HaltA();
-//     // // Stop encryption on PCD
-//     // rfid.PCD_StopCrypto1();
+// @brief Activates or deactivates action and alarm pins based on validity, with an optional duration.
+// If the input 'valid' is true, this function activates both the action and alarm pins (HIGH).
+// If a 'duration' is specified (greater than 0), the pins remain active for that duration (in milliseconds)
+// before being deactivated (LOW). If 'valid' is false, both action and alarm pins are immediately deactivated.
+// @param valid Boolean indicating whether to activate the pins (true) or deactivate them (false).
+// @param duration Optional duration (in milliseconds) for which the pins should remain active. Default is 500ms. If 0, the pins will remain active until manually deactivated.
+// @note ACTION_PIN and ALARM_PIN must be defined elsewhere in the code.
+void openSesame(bool valid, int duration = 500)
+{
+    if (valid)
+    {
+        digitalWrite(ACTION_PIN, HIGH); // Attiva il pin di azione
+        digitalWrite(ALARM_PIN, HIGH);  // Attiva il pin di allarme
 
-//     return success;
-// }
+        // Se è specificata una durata, attiva il pin per quel periodo
+        if (duration > 0)
+        {
+            delay(duration);
+            digitalWrite(ACTION_PIN, LOW); // Disattiva il pin di azione
+            digitalWrite(ALARM_PIN, LOW);  // Disattiva il pin di allarme
+        }
+    }
+    else // disattiva entrambi i pin quando non valido
+    {
+        digitalWrite(ACTION_PIN, LOW);
+        digitalWrite(ALARM_PIN, LOW);
+    }
+}

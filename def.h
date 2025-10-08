@@ -42,6 +42,12 @@ enum Mode
     MODE_WRITE
 };
 
+enum Job
+{
+    RUN,
+    SET
+};
+
 enum Agent
 {
     AGENT_READER,
@@ -298,37 +304,6 @@ void loadPayloadFromEEPROM(String *payload)
 
 /****************************************************************************/
 
-// @brief Activates or deactivates action and alarm pins based on validity, with an optional duration.
-// If the input 'valid' is true, this function activates both the action and alarm pins (HIGH).
-// If a 'duration' is specified (greater than 0), the pins remain active for that duration (in milliseconds)
-// before being deactivated (LOW). If 'valid' is false, both action and alarm pins are immediately deactivated.
-// @param valid Boolean indicating whether to activate the pins (true) or deactivate them (false).
-// @param duration Optional duration (in milliseconds) for which the pins should remain active. Default is 500ms. If 0, the pins will remain active until manually deactivated.
-// @note ACTION_PIN and ALARM_PIN must be defined elsewhere in the code.
-void openSesame(bool valid, int duration = 500)
-{
-    if (valid)
-    {
-        digitalWrite(ACTION_PIN, HIGH); // Attiva il pin di azione
-        digitalWrite(ALARM_PIN, HIGH);  // Attiva il pin di allarme
-
-        // Se è specificata una durata, attiva il pin per quel periodo
-        if (duration > 0)
-        {
-            delay(duration);
-            digitalWrite(ACTION_PIN, LOW); // Disattiva il pin di azione
-            digitalWrite(ALARM_PIN, LOW);  // Disattiva il pin di allarme
-        }
-    }
-    else // disattiva entrambi i pin quando non valido
-    {
-        digitalWrite(ACTION_PIN, LOW);
-        digitalWrite(ALARM_PIN, LOW);
-    }
-}
-
-/****************************************************************************/
-
 // @brief Triggers an error state by setting the ERROR_PIN high and waits for a button press to reset.
 // This function sets the ERROR_PIN to HIGH, indicating an error state. It then enters a loop,
 // waiting for a button press. When the specified button is pressed, the error state is cleared
@@ -336,20 +311,19 @@ void openSesame(bool valid, int duration = 500)
 // to perform any necessary actions related to closing or deactivating a mechanism.
 // @param btn A pointer to the DagButton object that triggers the reset.
 // @param fired A boolean flag indicating whether the error has been initially triggered. The loop continues as long as this flag is true.
-void triggerErrorAndWaitForReset(DagButton *btn, bool fired)
+void triggerErrorAndWaitForReset(DagButton *btn, bool *fired)
 {
     digitalWrite(ERROR_PIN, HIGH); // set the error pin to HIGH
-    while (fired)
+    while (*fired)
     {
         if (btn->pressed())
         {
-            fired = false;                // reset the flag
+            *fired = false;               // reset the flag
             digitalWrite(ERROR_PIN, LOW); // reset the error pin
         }
         delay(100);
     }
     // lcd_idle(&lcd, mode, block);
-    openSesame(false);
 }
 
 #endif
