@@ -19,22 +19,25 @@
 DagButton btnMode(BTN_MODE_PIN, PULLUP);
 DagButton btnReset(BTN_RESET_PIN, PULLUP);
 
+// TIMERS
+DagTimer blinkTimer; // Timer for blinking the action pin every 500ms in SET mode
+
 // RFID
 MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
 MFRC522::MIFARE_Key key;       // Key for the read and write
 
-Mode mode = MODE_READ;          // Current mode (MODE_READ or MODE_WRITE)
-Job job = RUN;                  // Current job (RUN or SET)
-Agent agent = AGENT_WRITER;     // Current agent (AGENT_READER or AGENT_WRITER)
+Mode mode = MODE_READ;      // Current mode (MODE_READ or MODE_WRITE)
+Job job = RUN;              // Current job (RUN or SET)
+Agent agent = AGENT_WRITER; // Current agent (AGENT_READER or AGENT_WRITER)
 
 // LCD
 LCD_I2C lcd(0x27, 16, 2);  // SDA => A4: SCL => A5
 String version = "v1.0.0"; // Version of the program
 bool fired = false;        //  flag to mark when a card is detected
 
-String value;   // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
+String value;           // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
 String passphrase = ""; // Passphrase stored to eeprom
-String uid;     // UID of the card
+String uid;             // UID of the card
 
 // Function prototypes
 String readTag(int *blocksArray, int blocksCount);
@@ -43,9 +46,10 @@ void executeAction(bool valid);
 
 void setup()
 {
-    Serial.begin(9600); // Initialize serial communications with the PC
-    SPI.begin();        // Init SPI bus for MFRC522
-    rfid.PCD_Init();    // Init MFRC522
+    Serial.begin(9600);    // Initialize serial communications with the PC
+    SPI.begin();           // Init SPI bus for MFRC522
+    rfid.PCD_Init();       // Init MFRC522
+    blinkTimer.init(2000); // Initialize the blink timer for 2000ms (REPEAT every 2000ms)
 
     // pinmode
     pinMode(ACTION_PIN, OUTPUT);
@@ -66,17 +70,18 @@ void setup()
         key.keyByte[i] = 0xFF;
     // key.keyByte[i] = cryptokey[i];
 
-    //lcd_init(&lcd, version);     // Initialize LCD
-    //lcd_idle(&lcd, mode, block); // Show idle message
+    // lcd_init(&lcd, version);     // Initialize LCD
+    // lcd_idle(&lcd, mode, block); // Show idle message
     executeAction(false); // Set the valid output to LOW as default
 }
 
 void loop()
 {
-    btnMode.onPress(toggleMode);   // Switch between read and write mode when button is pressed
+    btnMode.onPress(toggleMode);          // Switch between read and write mode when button is pressed
     btnMode.onLongPress(toggleJob, 3000); // Switch between RUN and SET job when button is long pressed for 3 seconds
+    blinkTimer.run(blinkIfSetMode);       // set the function to signal SET mode
 
-        // Look for new cards, else do nothing
+    // Look for new cards, else do nothing
     if (!rfid.PICC_IsNewCardPresent())
         return;
 
@@ -87,8 +92,8 @@ void loop()
     /***********************************************************************/
     // quando una carta è stata letta con successo
 
-    fired = true;                               // mark that a card is detected
-    Serial.println(F("Card detected:"));        // Show some details of the PICC (that is: the tag/card)
+    fired = true;                        // mark that a card is detected
+    Serial.println(F("Card detected:")); // Show some details of the PICC (that is: the tag/card)
     Serial.println();
 
     // ------------------------------------------------------------------------
@@ -118,7 +123,7 @@ void loop()
         // Handle beep signals based on readTag result
         if (value == "")
         {
-            beep(3); // error beep if reading failed or no data was read
+            beep(3);                                       // error beep if reading failed or no data was read
             triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed
         }
         else
@@ -186,7 +191,7 @@ void toggleMode()
 {
     mode = mode == MODE_READ ? MODE_WRITE : MODE_READ;
     beep(1);
-    //lcd_idle(&lcd, mode, block);
+    // lcd_idle(&lcd, mode, block);
     Serial.println(mode == MODE_READ ? "Read mode selected" : "Write mode selected");
 }
 
@@ -200,6 +205,19 @@ void toggleJob()
     beep(5);
     // lcd_idle(&lcd, mode, block);
     Serial.println(job == RUN ? "Job: RUN" : "Job: SET");
+}
+
+/****************************************************************************/
+/****************************************************************************/
+/****************************************************************************/
+
+// indicate if we are in programming mode (SET) by blinking the alarm pin
+void blinkIfSetMode()
+{
+    if (job == RUN)
+        return;
+    else if (job == SET)
+        beep(1, 250, 50); // short beep to indicate SET mode
 }
 
 /****************************************************************************/
