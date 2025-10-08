@@ -236,6 +236,10 @@ void toggleMode()
 {
     mode = mode == MODE_READ ? MODE_WRITE : MODE_READ;
     beep(1);
+
+    if (mode == MODE_WRITE)
+        job = RUN; // force to RUN mode if we are in WRITE mode
+
     // lcd_idle(&lcd, mode, block);
     Serial.println(mode == MODE_READ ? "Read mode selected" : "Write mode selected");
 }
@@ -247,7 +251,11 @@ void toggleMode()
 void toggleJob()
 {
     job = job == RUN ? SET : RUN;
-    beep(5);
+
+    if (mode == MODE_WRITE)
+        job = RUN; // force to RUN mode if we are in WRITE mode
+    else
+        beep(5); // conferma il cambio di modalità
     // lcd_idle(&lcd, mode, block);
     Serial.println(job == RUN ? "Job: RUN" : "Job: SET");
 }
