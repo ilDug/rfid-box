@@ -38,6 +38,7 @@ bool fired = false;        //  flag to mark when a card is detected
 String value;           // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
 String passphrase = ""; // Passphrase stored to eeprom
 String uid;             // UID of the card
+bool VALID = false;     // flag to mark if the read passphrase is valid
 
 // Function prototypes
 String readTag(int *blocksArray, int blocksCount);
@@ -116,6 +117,8 @@ void loop()
             return;
         }
 
+        // ------------------------------------------------------------------------
+
         value = "";                                           // reset the value
         int blocksCount = sizeof(blocks) / sizeof(blocks[0]); // calculate the number of blocks in the array
         value = readTag(blocks, blocksCount);                 // Read all blocks listed in the blocks array
@@ -128,8 +131,46 @@ void loop()
         }
         else
         {
-            beep(1, 600);        // success beep if data was read successfully
-            executeAction(true); // set the valid output to HIGH
+            /****************************************** */
+            /***************   SET MODE   ***************/
+            if (job == SET) // if we are in SET mode, save the passphrase to EEPROM
+            {
+                passphrase = value; // update the passphrase with the new value read from the card
+                bool saved = savePayloadToEEPROM(&passphrase);
+                if (!saved)
+                {
+                    triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed
+                    job = RUN;                                     // torna in RUN mode dopo aver tentato di salvare la passphrase
+                    return;
+                }
+
+                // altrimenti segnala che il salvataggio della nuova passphrase è avvenuto con successo
+                beep(1, 1000);
+                while (fired) // si ferma qui finché non viene premuto il pulsante di reset
+                {
+                    if (btnReset.pressed())
+                    {
+                        fired = false; // reset the flag
+                        job = RUN;     // torna in RUN mode dopo aver salvato la passphrase
+                        return;
+                    }
+                    delay(100);
+                }
+            }
+            /****************************************** */
+            /***************   RUN MODE   ***************/
+            // verificare se la passphrase letta corrisponde a quella salvata in eeprom
+            VALID = (value == passphrase);
+            if (!VALID)
+            {
+                triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed
+                return;
+            }
+            else
+            {
+                beep(1, 600);        // success beep if data was read successfully
+                executeAction(true); // set the valid output to HIGH
+            }
         }
 
         // Get the UID of the card as a string
@@ -178,6 +219,10 @@ void loop()
 
         triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed
     }
+
+    // ------------------------------------------------------------------------
+    // termina l'esecuzione con fired a false
+    fired = false;
 }
 
 /****************************************************************************/
@@ -473,49 +518,19 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
 /****************************************************************************/
 /****************************************************************************/
 
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-
 // Function to execute action based on validity
 // Definire la funzione in base al lavoro che si deve fare
 void executeAction(bool valid)
 {
     if (valid)
     {
-        // TO DO
+        digitalWrite(ACTION_PIN, HIGH);
+        digitalWrite(ALARM_PIN, HIGH);
+        delay(1000); // keep the action pin HIGH for 1 second
+        digitalWrite(ACTION_PIN, LOW);
+        digitalWrite(ALARM_PIN, LOW);
     }
     else
-    {
-        // TO DO
-    }
-}
-
-/****************************************************************************/
-
-// @brief Activates or deactivates action and alarm pins based on validity, with an optional duration.
-// If the input 'valid' is true, this function activates both the action and alarm pins (HIGH).
-// If a 'duration' is specified (greater than 0), the pins remain active for that duration (in milliseconds)
-// before being deactivated (LOW). If 'valid' is false, both action and alarm pins are immediately deactivated.
-// @param valid Boolean indicating whether to activate the pins (true) or deactivate them (false).
-// @param duration Optional duration (in milliseconds) for which the pins should remain active. Default is 500ms. If 0, the pins will remain active until manually deactivated.
-// @note ACTION_PIN and ALARM_PIN must be defined elsewhere in the code.
-void openSesame(bool valid, int duration = 500)
-{
-    if (valid)
-    {
-        digitalWrite(ACTION_PIN, HIGH); // Attiva il pin di azione
-        digitalWrite(ALARM_PIN, HIGH);  // Attiva il pin di allarme
-
-        // Se è specificata una durata, attiva il pin per quel periodo
-        if (duration > 0)
-        {
-            delay(duration);
-            digitalWrite(ACTION_PIN, LOW); // Disattiva il pin di azione
-            digitalWrite(ALARM_PIN, LOW);  // Disattiva il pin di allarme
-        }
-    }
-    else // disattiva entrambi i pin quando non valido
     {
         digitalWrite(ACTION_PIN, LOW);
         digitalWrite(ALARM_PIN, LOW);
