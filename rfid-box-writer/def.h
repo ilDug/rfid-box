@@ -511,9 +511,6 @@ void triggerErrorAndWaitForReset(DagButton *btn, bool *fired)
         }
         delay(100); // Prevent excessive polling and reduce power consumption
     }
-
-    // Note: LCD idle display could be restored here if implemented
-    // lcd_idle(&lcd, mode, block);
 }
 
 #endif // DAG_CONSTANTS_H
