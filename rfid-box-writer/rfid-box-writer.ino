@@ -19,6 +19,7 @@
 #include "dag-timer.h"  // Custom timer library for periodic tasks
 #include "def.h"        // Pin definitions, constants, and utility functions
 #include "data.h"       // Data storage
+#include "lcd.h"        // LCD display management functions
 
 // ============================================================================
 // HARDWARE INITIALIZATION
@@ -163,7 +164,7 @@ void loop()
 
     fired = true;                                   // Set flag indicating card processing is active
     uid = uidToString(rfid.uid);                    // Get the UID of the card as a string
-    Serial.println(F("Card detected UID: " + uid)); // Log card detection event
+    Serial.println("Card detected UID: " + uid); // Log card detection event
     Serial.println();
 
     // ========================================================================

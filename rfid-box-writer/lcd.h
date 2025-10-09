@@ -15,7 +15,6 @@
 #include "Arduino.h"
 #include <Wire.h>
 #include <LCD_I2C.h>
-#include "def.h"
 
 // ============================================================================
 // INIZIALIZZAZIONE E CONFIGURAZIONE LCD
@@ -299,3 +298,5 @@ void lcd_write_block_error(LCD_I2C *lcd)
     // Passo 5: Visualizzazione del numero del blocco con errore
     lcd->print("remove card!");
 }
+
+#endif // LCD_MANAGER_H
