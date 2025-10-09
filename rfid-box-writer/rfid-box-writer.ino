@@ -12,7 +12,7 @@
 #include "dag-button.h"
 #include "dag-timer.h"
 #include "def.h"
-#include "lcd.h"
+// #include "lcd.h"
 #include "data.h"
 
 // BUTTONS
@@ -104,7 +104,7 @@ void loop()
         // check card compatibility
         if (!checkCompatibility())
         {
-            triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed only in write mode
+            triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed only in write mode
             return;
         }
 
@@ -127,7 +127,7 @@ void loop()
         if (value == "")
         {
             beep(3);                                       // error beep if reading failed or no data was read
-            triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed
+            triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed
         }
         else
         {
@@ -139,7 +139,7 @@ void loop()
                 bool saved = savePayloadToEEPROM(&passphrase);
                 if (!saved)
                 {
-                    triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed
+                    triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed
                     job = RUN;                                     // torna in RUN mode dopo aver tentato di salvare la passphrase
                     return;
                 }
@@ -163,7 +163,7 @@ void loop()
             VALID = (value == passphrase);
             if (!VALID)
             {
-                triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed
+                triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed
                 return;
             }
             else
@@ -189,7 +189,7 @@ void loop()
         // check card compatibility
         if (!checkCompatibility())
         {
-            triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed only in write mode
+            triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed only in write mode
             return;
         }
 
@@ -217,7 +217,7 @@ void loop()
 
         beep(1, 1000);
 
-        triggerErrorAndWaitForReset(btnReset, &fired); // wait until the reset button is pressed
+        triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed
     }
 
     // ------------------------------------------------------------------------
@@ -365,11 +365,12 @@ String readTag(int *blocksArray, int blocksCount)
             Serial.println();
 
             blockValue = bufferToString(buffer, len - 2); // convert the byte reading array to a string (ASCII)
+            blockValue.trim();
             Serial.println("Block " + String(currentBlock) + " content: " + blockValue);
             Serial.println();
 
             // Check if the block value is empty/null - if so, stop reading
-            if (blockValue.length() == 0 || blockValue.trim().length() == 0)
+            if (blockValue.length() == 0)
             {
                 Serial.println("Found empty block " + String(currentBlock) + ", stopping read operation.");
                 Serial.println();
