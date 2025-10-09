@@ -1,349 +1,436 @@
 /**
- * @file rfid-box.ino
- * @brief RFID Box
- * @details This is the main file for the RFID Box project. It includes the setup and loop functions.
+ * @file rfid-box-writer.ino
+ * @brief RFID Box Writer - Secure Access Control System
+ * @details This Arduino sketch implements a dual-mode RFID system that can both read and write
+ *          MIFARE Classic cards for access control. The system supports two operational modes:
+ *          - READ mode: Validates cards against stored passphrase for access control
+ *          - WRITE mode: Programs new cards with the current passphrase
+ *          Additionally, it supports SET mode for updating the master passphrase.
  * @author Dag
+ * @version 1.0.0
  */
 
-#include <SPI.h>
-#include <MFRC522.h> // https://github.com/miguelbalboa/rfid
-#include <Wire.h>
-#include <LCD_I2C.h>
-#include "dag-button.h"
-#include "dag-timer.h"
-#include "def.h"
-// #include "lcd.h"
-#include "data.h"
+// Required libraries for RFID, LCD, and system functionality
+#include <SPI.h>        // SPI communication for RFID module
+#include <MFRC522.h>    // RFID library - https://github.com/miguelbalboa/rfid
+#include <Wire.h>       // I2C communication for LCD
+#include <LCD_I2C.h>    // LCD display library
+#include "dag-button.h" // Custom button library
+#include "dag-timer.h"  // Custom timer library for periodic tasks
+#include "def.h"        // Pin definitions, constants, and utility functions
+#include "data.h"       // Data storage
 
-// BUTTONS
-DagButton btnMode(BTN_MODE_PIN, PULLUP);
-DagButton btnReset(BTN_RESET_PIN, PULLUP);
+// ============================================================================
+// HARDWARE INITIALIZATION
+// ============================================================================
 
-// TIMERS
-DagTimer blinkTimer; // Timer for blinking the action pin every 500ms in SET mode
+// BUTTON objects for user interaction
+DagButton btnMode(BTN_MODE_PIN, PULLUP);   // Button to toggle between READ/WRITE modes
+DagButton btnReset(BTN_RESET_PIN, PULLUP); // Button to reset system state and confirm operations
 
-// RFID
-MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
-MFRC522::MIFARE_Key key;       // Key for the read and write
+// TIMER for visual/audio feedback during SET mode
+DagTimer blinkTimer; // Generates periodic signals to indicate SET mode is active
 
-Mode mode = MODE_READ;      // Current mode (MODE_READ or MODE_WRITE)
-Job job = RUN;              // Current job (RUN or SET)
-Agent agent = AGENT_WRITER; // Current agent (AGENT_READER or AGENT_WRITER)
+// RFID hardware components
+MFRC522 rfid(SS_PIN, RST_PIN); // RFID reader instance using SPI communication
+MFRC522::MIFARE_Key key;       // Cryptographic key for card authentication (read/write operations)
 
-// LCD
-LCD_I2C lcd(0x27, 16, 2);  // SDA => A4: SCL => A5
-String version = "v1.0.0"; // Version of the program
-bool fired = false;        //  flag to mark when a card is detected
+// ============================================================================
+// SYSTEM STATE VARIABLES
+// ============================================================================
 
-String value;           // Value read from the card as a string (ASCII) up to 16 bytes (16 characters)
-String passphrase = ""; // Passphrase stored to eeprom
-String uid;             // UID of the card
-bool VALID = false;     // flag to mark if the read passphrase is valid
+Mode MODE = MODE_READ;      // Current operational mode: READ (validate cards) or WRITE (program cards)
+Job JOB = RUN;              // Current job type: RUN (normal operation) or SET (passphrase programming)
+Agent AGENT = AGENT_WRITER; // Device role identifier (WRITER variant of the RFID box system)
 
-// Function prototypes
+// LCD display for user feedback (16x2 character display)
+LCD_I2C lcd(0x27, 16, 2);  // I2C address 0x27, 16 columns, 2 rows (SDA=A4, SCL=A5)
+String VERSION = "v1.0.0"; // Firmware version for display and serial output
+
+// ============================================================================
+// RUNTIME STATE FLAGS AND DATA
+// ============================================================================
+
+bool fired = false;     // Flag indicating a card has been detected and is being processed
+String value;           // Temporary storage for data read from current card (up to 16 chars per block)
+String passphrase = ""; // Master passphrase loaded from EEPROM for card validation
+String uid;             // Unique identifier of the currently detected card
+bool VALID = false;     // Flag indicating whether the current card contains valid passphrase
+
+// Forward declarations of main FUNCTIONS
 String readTag(int *blocksArray, int blocksCount);
 bool writeTag(String data, int *blocksArray, int blocksCount);
 void executeAction(bool valid);
 
+/**
+ * @brief System initialization and hardware setup
+ * @details Initializes all hardware components, loads configuration from EEPROM,
+ *          and prepares the system for normal operation. This function runs once
+ *          at startup and sets up:
+ *          - Serial communication for debugging
+ *          - SPI bus and RFID reader
+ *          - GPIO pins for outputs (action, alarm, error)
+ *          - Timer for SET mode indication
+ *          - RFID authentication key
+ *          - Master passphrase from EEPROM
+ */
 void setup()
 {
-    Serial.begin(9600);    // Initialize serial communications with the PC
-    SPI.begin();           // Init SPI bus for MFRC522
-    rfid.PCD_Init();       // Init MFRC522
-    blinkTimer.init(2000); // Initialize the blink timer for 2000ms (REPEAT every 2000ms)
+    // Initialize communication interfaces
+    Serial.begin(9600);    // Start serial communication for debugging and status output
+    SPI.begin();           // Initialize SPI bus for RFID module communication
+    rfid.PCD_Init();       // Initialize the MFRC522 RFID reader
+    blinkTimer.init(2000); // Setup periodic timer (2000ms intervals) for SET mode indication
 
-    // pinmode
-    pinMode(ACTION_PIN, OUTPUT);
-    pinMode(ALARM_PIN, OUTPUT);
-    pinMode(ERROR_PIN, OUTPUT);
+    // Configure output pins for system feedback
+    pinMode(ACTION_PIN, OUTPUT); // Main action output (e.g., relay control, lock mechanism)
+    pinMode(ALARM_PIN, OUTPUT);  // Audio/visual alarm for status indication
+    pinMode(ERROR_PIN, OUTPUT);  // Error state indicator
 
-    Serial.println("RFID Box " + version);
+    // Display system information via serial
+    Serial.println("RFID Box " + VERSION);
     Serial.println("Reader details:");
-    rfid.PCD_DumpVersionToSerial(); // Show details of PCD - MFRC522 Card Reader details
+    rfid.PCD_DumpVersionToSerial(); // Display RFID reader hardware information
+
+    // Load master passphrase from persistent storage
     Serial.println("reading passphrase from eeprom...");
     loadPayloadFromEEPROM(&passphrase);
     Serial.println("Passphrase: " + passphrase);
     Serial.println();
 
-    // Prepare the key (used both for read and write) using FFFFFFFFFFFF hex value
-    // for each byte of the key (6 bytes) [Factory default]
+    // Initialize RFID authentication key
+    // Using factory default key (FFFFFFFFFFFF) for MIFARE Classic cards
+    // Alternative: use custom cryptographic key from def.h
     for (byte i = 0; i < MFRC522::MF_KEY_SIZE; i++)
         key.keyByte[i] = 0xFF;
-    // key.keyByte[i] = cryptokey[i];
+    // key.keyByte[i] = cryptokey[i]; // Uncomment to use custom key
 
-    // lcd_init(&lcd, version);     // Initialize LCD
-    // lcd_idle(&lcd, mode, block); // Show idle message
-    executeAction(false); // Set the valid output to LOW as default
+    // Initialize system state
+    executeAction(false); // Ensure all outputs are in safe/inactive state
 }
 
+/**
+ * @brief Main program loop - handles user input and card detection
+ * @details This function runs continuously and manages:
+ *          - Button press detection and mode switching
+ *          - RFID card detection and processing
+ *          - System state management (RUN/SET, READ/WRITE modes)
+ *          - Card authentication and data operations
+ *          The loop implements a state machine that responds to user input
+ *          and processes RFID cards according to the current operational mode.
+ */
 void loop()
 {
-    btnMode.onPress(toggleMode);          // Switch between read and write mode when button is pressed
-    btnMode.onLongPress(toggleJob, 3000); // Switch between RUN and SET job when button is long pressed for 3 seconds
-    blinkTimer.run(blinkIfSetMode);       // set the function to signal SET mode
+    // ========================================================================
+    // USER INPUT HANDLING
+    // ========================================================================
 
-    // Look for new cards, else do nothing
+    // Handle mode switching: short press toggles READ/WRITE mode
+    btnMode.onPress(toggleMode);
+
+    // Handle job switching: long press (3s) toggles RUN/SET mode
+    btnMode.onLongPress(toggleJob, 3000);
+
+    // Provide visual/audio feedback when in SET mode (passphrase programming)
+    blinkTimer.run(blinkIfSetMode);
+
+    // ========================================================================
+    // RFID CARD DETECTION
+    // ========================================================================
+
+    // Check for presence of new RFID card - exit if none detected
     if (!rfid.PICC_IsNewCardPresent())
         return;
 
-    // Select one of the cards, else do nothing
+    // Attempt to read card serial number - exit if communication fails
     if (!rfid.PICC_ReadCardSerial())
         return;
 
-    /***********************************************************************/
-    // quando una carta è stata letta con successo
+    // ========================================================================
+    // CARD PROCESSING BEGINS
+    // ========================================================================
 
-    fired = true;                        // mark that a card is detected
-    Serial.println(F("Card detected:")); // Show some details of the PICC (that is: the tag/card)
+    fired = true;                        // Set flag indicating card processing is active
+    Serial.println(F("Card detected:")); // Log card detection event
     Serial.println();
 
-    // ------------------------------------------------------------------------
-    // Read data from the card
-    if (mode == MODE_READ)
+    // ========================================================================
+    // READ MODE PROCESSING
+    // ========================================================================
+    if (MODE == MODE_READ)
     {
-        // check card compatibility
+        // Verify card compatibility with MIFARE Classic standard
         if (!checkCompatibility())
         {
-            triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed only in write mode
+            triggerErrorAndWaitForReset(&btnReset, &fired);
             return;
         }
 
-        // lcd_reading(&lcd);
-
-        // quando si tiene premuto il pulsante di reset durante la lettura, stampa al Serial monitor i dati di tutti i blocchi
+        // Special debug feature: dump all card data when reset button is held
         if (btnReset.clicked())
         {
-            rfid.PICC_DumpToSerial(&(rfid.uid)); // dump some details about the card
+            rfid.PICC_DumpToSerial(&(rfid.uid)); // Output complete card structure to serial
             return;
         }
 
-        // ------------------------------------------------------------------------
+        // ====================================================================
+        // READ CARD DATA
+        // ====================================================================
 
-        value = "";                                           // reset the value
-        int blocksCount = sizeof(blocks) / sizeof(blocks[0]); // calculate the number of blocks in the array
-        value = readTag(blocks, blocksCount);                 // Read all blocks listed in the blocks array
+        value = "";                                           // Clear previous read data
+        int blocksCount = sizeof(blocks) / sizeof(blocks[0]); // Calculate total blocks to read
+        value = readTag(blocks, blocksCount);                 // Read passphrase from all configured blocks
 
-        // Handle beep signals based on readTag result
+        // Handle read operation results
         if (value == "")
         {
-            beep(3);                                       // error beep if reading failed or no data was read
-            triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed
+            // Reading failed - provide error feedback and wait for user reset
+            beep(3);                                        // Triple beep indicates read error
+            triggerErrorAndWaitForReset(&btnReset, &fired); // Enter error state
         }
         else
         {
-            /****************************************** */
-            /***************   SET MODE   ***************/
-            if (job == SET) // if we are in SET mode, save the passphrase to EEPROM
+            // ================================================================
+            // SET MODE: PASSPHRASE PROGRAMMING
+            // ================================================================
+            if (JOB == SET)
             {
-                passphrase = value; // update the passphrase with the new value read from the card
+                // In SET mode, use the read passphrase to update the master passphrase
+                passphrase = value; // Update master passphrase with card data
                 bool saved = savePayloadToEEPROM(&passphrase);
+
                 if (!saved)
                 {
-                    triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed
-                    job = RUN;                                     // torna in RUN mode dopo aver tentato di salvare la passphrase
+                    // EEPROM save failed
+                    triggerErrorAndWaitForReset(&btnReset, &fired);
+                    JOB = RUN; // Return to normal operation mode
                     return;
                 }
 
-                // altrimenti segnala che il salvataggio della nuova passphrase è avvenuto con successo
-                beep(1, 1000);
-                while (fired) // si ferma qui finché non viene premuto il pulsante di reset
+                // Passphrase successfully saved - provide confirmation
+                beep(1, 1000); // Long success beep
+                while (fired)  // Wait for user acknowledgment via reset button
                 {
                     if (btnReset.pressed())
                     {
-                        fired = false; // reset the flag
-                        job = RUN;     // torna in RUN mode dopo aver salvato la passphrase
+                        fired = false; // Clear processing flag
+                        JOB = RUN;     // Return to normal operation mode
                         return;
                     }
                     delay(100);
                 }
             }
-            /****************************************** */
-            /***************   RUN MODE   ***************/
-            // verificare se la passphrase letta corrisponde a quella salvata in eeprom
-            VALID = (value == passphrase);
-            if (!VALID)
-            {
-                triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed
-                return;
-            }
+
+            // ================================================================
+            // RUN MODE: ACCESS VALIDATION
+            // ================================================================
             else
             {
-                beep(1, 600);        // success beep if data was read successfully
-                executeAction(true); // set the valid output to HIGH
+                // Compare read passphrase with stored master passphrase
+                VALID = (value == passphrase);
+
+                if (!VALID)
+                {
+                    // Invalid passphrase - deny access
+                    triggerErrorAndWaitForReset(&btnReset, &fired);
+                    return;
+                }
+                else
+                {
+                    // Valid passphrase - grant access
+                    beep(1, 600);        // Success confirmation beep
+                    executeAction(true); // Activate access control mechanism
+                }
             }
         }
-
-        // Get the UID of the card as a string
-        // uid = uidToString(rfid.uid);
-        // lcd_reading_result(&lcd, uid, value);
-
-        // Halt PICC
-        // rfid.PICC_HaltA();
-        // Stop encryption on PCD
-        // rfid.PCD_StopCrypto1();
     }
 
-    // ------------------------------------------------------------------------
-    else if (mode == MODE_WRITE)
+    // ========================================================================
+    // WRITE MODE PROCESSING
+    // ========================================================================
+    else if (MODE == MODE_WRITE)
     {
-        // check card compatibility
+        // Verify card compatibility before attempting write operations
         if (!checkCompatibility())
         {
-            triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed only in write mode
+            triggerErrorAndWaitForReset(&btnReset, &fired);
             return;
         }
 
-        // lcd_writing(&lcd);
         Serial.println("Write mode switched on");
 
-        // Write all data using the new writeTag function
+        // Write current master passphrase to all configured blocks on the card
         int blocksCount = sizeof(blocks) / sizeof(blocks[0]);
         bool result = writeTag(&passphrase, blocks, blocksCount);
+
         if (result)
         {
-            // lcd_reading_result(&lcd, "Write success", "All blocks written");
             Serial.println("Write operation completed successfully");
+            // Note: LCD feedback could be added here if display is connected
         }
         else
         {
-            // lcd_reading_error(&lcd, "Write failed");
             Serial.println("Write operation failed");
+            // Note: LCD error display could be added here
         }
 
-        // Halt PICC
-        // rfid.PICC_HaltA();
-        // Stop encryption on PCD
-        // rfid.PCD_StopCrypto1();
+        // Provide audio confirmation of write completion
+        beep(1, 1000); // Long beep indicates write operation finished
 
-        beep(1, 1000);
-
-        triggerErrorAndWaitForReset(&btnReset, &fired); // wait until the reset button is pressed
+        // Enter waiting state until user acknowledges with reset button
+        triggerErrorAndWaitForReset(&btnReset, &fired);
     }
 
-    // ------------------------------------------------------------------------
-    // termina l'esecuzione con fired a false
+    // ========================================================================
+    // CLEANUP AND RESET
+    // ========================================================================
+
+    // Clear the card processing flag to allow detection of next card
     fired = false;
 }
 
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
+// ============================================================================
+// SYSTEM CONTROL FUNCTIONS
+// ============================================================================
 
 /**
- * switch between modes
+ * @brief Toggle between READ and WRITE operational modes
+ * @details Switches the system between card validation (READ) and card programming (WRITE).
+ *          In WRITE mode, the job is automatically forced to RUN to prevent accidental
+ *          passphrase modification during card programming operations.
  */
 void toggleMode()
 {
-    mode = mode == MODE_READ ? MODE_WRITE : MODE_READ;
-    beep(1);
+    MODE = MODE == MODE_READ ? MODE_WRITE : MODE_READ;
+    beep(1); // Single beep confirms mode change
 
-    if (mode == MODE_WRITE)
-        job = RUN; // force to RUN mode if we are in WRITE mode
+    // Security measure: force RUN mode when switching to WRITE to prevent accidents
+    if (MODE == MODE_WRITE)
+        JOB = RUN;
 
-    // lcd_idle(&lcd, mode, block);
-    Serial.println(mode == MODE_READ ? "Read mode selected" : "Write mode selected");
+    Serial.println(MODE == MODE_READ ? "Read mode selected" : "Write mode selected");
 }
 
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-// switch between JOBS
+/**
+ * @brief Toggle between RUN and SET job modes
+ * @details Switches between normal operation (RUN) and passphrase programming (SET).
+ *          SET mode allows updating the master passphrase by reading it from a card.
+ *          This function includes safety measures to prevent accidental passphrase changes.
+ */
 void toggleJob()
 {
-    job = job == RUN ? SET : RUN;
+    JOB = JOB == RUN ? SET : RUN;
 
-    if (mode == MODE_WRITE)
-        job = RUN; // force to RUN mode if we are in WRITE mode
+    // Security measure: only allow SET mode in READ mode to prevent write conflicts
+    if (MODE == MODE_WRITE)
+        JOB = RUN;
     else
-        beep(5); // conferma il cambio di modalità
-    // lcd_idle(&lcd, mode, block);
-    Serial.println(job == RUN ? "Job: RUN" : "Job: SET");
+        beep(5); // Multiple beeps confirm job mode change (only in READ mode)
+
+    Serial.println(JOB == RUN ? "Job: RUN" : "Job: SET");
 }
 
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-
-// indicate if we are in programming mode (SET) by blinking the alarm pin
+/**
+ * @brief Provide audio feedback when system is in SET mode
+ * @details Called periodically by the blink timer to indicate that the system
+ *          is in SET mode (passphrase programming mode). Generates short beeps
+ *          to alert the user that the next card read will update the master passphrase.
+ */
 void blinkIfSetMode()
 {
-    if (job == RUN)
-        return;
-    else if (job == SET)
-        beep(1, 250, 50); // short beep to indicate SET mode
+    if (JOB == RUN)
+        return; // No indication needed in normal operation mode
+    else if (JOB == SET)
+        beep(1, 250, 50); // Short, quiet beep indicates SET mode is active
 }
 
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
+// ============================================================================
+// RFID CARD OPERATIONS
+// ============================================================================
 
-// Authenticate using key A
+/**
+ * @brief Authenticate with RFID card using Key A
+ * @details Performs MIFARE Classic authentication for a specific block using Key A.
+ *          This is required before any read or write operation can be performed.
+ * @param block The block number to authenticate (0-63 for MIFARE Classic 1K)
+ * @return true if authentication successful, false if failed
+ */
 bool authenticateA(byte block)
 {
     MFRC522::StatusCode status;
     status = rfid.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, block, &key, &(rfid.uid));
+
     if (status != MFRC522::STATUS_OK)
     {
         Serial.print(F("Authentication failed: "));
         Serial.println(rfid.GetStatusCodeName(status));
-        // lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
         return false;
     }
     else
         return true;
 }
 
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-
-// Check for card  compatibility
+/**
+ * @brief Verify RFID card compatibility with system requirements
+ * @details Checks if the detected card is a MIFARE Classic type, which is required
+ *          for this system. Other card types (MIFARE Ultralight, NTAG, etc.) are
+ *          not supported due to different memory structures and authentication methods.
+ * @return true if card is compatible (MIFARE Classic Mini/1K/4K), false otherwise
+ */
 bool checkCompatibility()
 {
     MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
-    if (piccType != MFRC522::PICC_TYPE_MIFARE_MINI && piccType != MFRC522::PICC_TYPE_MIFARE_1K && piccType != MFRC522::PICC_TYPE_MIFARE_4K)
+
+    if (piccType != MFRC522::PICC_TYPE_MIFARE_MINI &&
+        piccType != MFRC522::PICC_TYPE_MIFARE_1K &&
+        piccType != MFRC522::PICC_TYPE_MIFARE_4K)
     {
         Serial.println(F("This device only works with MIFARE Classic cards."));
-        // lcd_reading_error(&lcd, "Card not supported");
         return false;
     }
     else
         return true;
 }
 
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-
 /**
- * Read data from all blocks defined in the blocks array
- * @param blocksArray pointer to the array of blocks to read
- * @param blocksCount number of blocks in the array
- * @return concatenated value read from all blocks as a string
+ * @brief Read passphrase data from multiple RFID card blocks
+ * @details Sequentially reads data from all specified blocks and concatenates them
+ *          into a single passphrase string. The function handles authentication,
+ *          error checking, and stops reading when empty blocks are encountered.
+ *          Each block contains up to 16 bytes of data that are converted to ASCII.
+ *
+ * @param blocksArray Pointer to array of block numbers to read from
+ * @param blocksCount Number of blocks in the array
+ * @return Concatenated passphrase string from all blocks, or empty string if error occurred
+ *
+ * @note The function automatically handles RFID communication cleanup (halt and stop crypto)
+ * @note Reading stops early if an empty block is encountered to avoid processing null data
  */
 String readTag(int *blocksArray, int blocksCount)
 {
-    byte len = 18;          // Length of the buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
-    String finalValue = ""; // final concatenated value from all blocks
+    byte len = 18;          // Buffer size: 16 data bytes + 2 CRC bytes
+    String finalValue = ""; // Accumulated passphrase from all blocks
 
     Serial.println(F("Reading data from all blocks..."));
     Serial.println();
 
+    // Process each block in sequence
     for (int i = 0; i < blocksCount; i++)
     {
         byte currentBlock = blocksArray[i];
-        byte buffer[len];       // buffer to store the data read from the card (16 bytes + 2 bytes for CRC)
-        String blockValue = ""; // value read from current block
+        byte buffer[len];       // Temporary buffer for block data
+        String blockValue = ""; // ASCII content of current block
 
-        // Authenticate for each block
+        // Authenticate before reading each block
         if (!authenticateA(currentBlock))
         {
             Serial.println("CRITICAL ERROR: Authentication failed for block " + String(currentBlock));
             Serial.println("Stopping read operation due to authentication failure.");
             Serial.println();
-            return ""; // return empty string to indicate failure
+            return ""; // Authentication failure is critical - abort entire operation
         }
 
+        // Attempt to read data from the authenticated block
         MFRC522::StatusCode status = rfid.MIFARE_Read(currentBlock, buffer, &len);
         if (status != MFRC522::STATUS_OK)
         {
@@ -353,79 +440,85 @@ String readTag(int *blocksArray, int blocksCount)
             Serial.println(rfid.GetStatusCodeName(status));
             Serial.println("Stopping read operation due to read failure.");
             Serial.println();
-            // lcd_reading_error(&lcd, rfid.GetStatusCodeName(status));
-            return ""; // return empty string to indicate failure
+            return ""; // Read failure is critical - abort entire operation
         }
         else
         {
+            // Successfully read block - process the data
             Serial.print(F("Data in block "));
             Serial.print(currentBlock);
             Serial.println(F(":"));
-            dump_byte_array(buffer, len - 2); // dump the data read from the card to the serial monitor
+            dump_byte_array(buffer, len - 2); // Display raw hex data (excluding CRC)
             Serial.println();
 
-            blockValue = bufferToString(buffer, len - 2); // convert the byte reading array to a string (ASCII)
-            blockValue.trim();
+            // Convert binary data to ASCII string
+            blockValue = bufferToString(buffer, len - 2);
+            blockValue.trim(); // Remove leading/trailing whitespace
             Serial.println("Block " + String(currentBlock) + " content: " + blockValue);
             Serial.println();
 
-            // Check if the block value is empty/null - if so, stop reading
+            // Check for empty block - indicates end of passphrase data
             if (blockValue.length() == 0)
             {
                 Serial.println("Found empty block " + String(currentBlock) + ", stopping read operation.");
                 Serial.println();
-                break; // terminate the reading loop
+                break; // Stop reading when empty block is found
             }
 
-            // Concatenate the block value to the final string
+            // Append block content to final passphrase
             finalValue += blockValue;
         }
     }
 
-    // Trim whitespace from the beginning and end of finalValue
+    // Clean up the final result
     finalValue.trim();
 
     Serial.println("Final concatenated value: " + finalValue);
     Serial.println();
 
-    // Halt PICC
-    rfid.PICC_HaltA();
-    // Stop encryption on PCD
-    rfid.PCD_StopCrypto1();
+    // Properly terminate RFID communication
+    rfid.PICC_HaltA();      // Put card to sleep
+    rfid.PCD_StopCrypto1(); // Stop encryption on reader
 
     return finalValue;
 }
 
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
-
 /**
- * Write data to all blocks defined in the blocks array
- * @param data String to write to the tag (will be distributed across multiple blocks)
- * @param blocksArray pointer to the array of blocks to write
- * @param blocksCount number of blocks in the array
- * @return true if all blocks were written successfully, false if any error occurred
+ * @brief Write passphrase data to multiple RFID card blocks
+ * @details Distributes a passphrase string across multiple MIFARE Classic blocks,
+ *          writing 16 bytes per block. The function handles authentication,
+ *          data padding, and clearing of unused blocks. Remaining blocks are
+ *          filled with null bytes to ensure clean card state.
+ *
+ * @param data Pointer to string containing passphrase to write to card
+ * @param blocksArray Pointer to array of block numbers to write to
+ * @param blocksCount Number of blocks available for writing
+ * @return true if all blocks written successfully, false if any error occurred
+ *
+ * @note Each block holds exactly 16 bytes; longer passphrases span multiple blocks
+ * @note Unused blocks are cleared with null bytes to prevent data leakage
+ * @note Function automatically handles RFID communication cleanup
  */
 bool writeTag(String *data, int *blocksArray, int blocksCount)
 {
     int dataLength = data->length();
-    int dataIndex = 0;
+    int dataIndex = 0; // Current position in the source data string
 
     Serial.println(F("Writing data to all blocks..."));
     Serial.println("Data to write: " + *data);
     Serial.println("Data length: " + String(dataLength));
     Serial.println();
 
+    // Process each block in sequence
     for (int i = 0; i < blocksCount; i++)
     {
         byte currentBlock = blocksArray[i];
-        byte buffer[16]; // buffer to store the data to write to the card (16 bytes per block)
+        byte buffer[16]; // MIFARE Classic blocks are exactly 16 bytes
 
-        // Clear the buffer
+        // Initialize buffer with null bytes
         memset(buffer, 0x00, 16);
 
-        // Fill buffer with data or nulls
+        // Fill buffer with data or leave as nulls if no more data
         for (int j = 0; j < 16; j++)
         {
             if (dataIndex < dataLength)
@@ -435,20 +528,20 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
             }
             else
             {
-                buffer[j] = 0x00; // null bytes for remaining space
+                buffer[j] = 0x00; // Pad remaining space with null bytes
             }
         }
 
-        // Authenticate for each block
+        // Authenticate before writing to each block
         if (!authenticateA(currentBlock))
         {
             Serial.println("CRITICAL ERROR: Authentication failed for block " + String(currentBlock));
             Serial.println("Stopping write operation due to authentication failure.");
             Serial.println();
-            return false; // return false to indicate failure
+            return false; // Authentication failure is critical - abort operation
         }
 
-        // Write data to the card
+        // Attempt to write data to the authenticated block
         MFRC522::StatusCode status = rfid.MIFARE_Write(currentBlock, buffer, 16);
         if (status != MFRC522::STATUS_OK)
         {
@@ -458,15 +551,16 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
             Serial.println(rfid.GetStatusCodeName(status));
             Serial.println("Stopping write operation due to write failure.");
             Serial.println();
-            return false; // return false to indicate failure
+            return false; // Write failure is critical - abort operation
         }
         else
         {
+            // Successfully wrote to block - log the operation
             Serial.print(F("Successfully wrote to block "));
             Serial.print(currentBlock);
             Serial.print(F(" - Data: "));
 
-            // Print the data written to this block
+            // Display the ASCII content written to this block
             String blockData = "";
             for (int k = 0; k < 16; k++)
             {
@@ -476,17 +570,17 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
             Serial.println(blockData);
         }
 
-        // If we've written all the data and the rest would be nulls, we can stop
+        // Check if all data has been written
         if (dataIndex >= dataLength)
         {
             Serial.println("All data written successfully. Remaining blocks will be cleared.");
             Serial.println();
 
-            // Continue to clear remaining blocks with null values
+            // Clear any remaining blocks to ensure no old data remains
             for (int remainingBlock = i + 1; remainingBlock < blocksCount; remainingBlock++)
             {
                 byte nullBuffer[16];
-                memset(nullBuffer, 0x00, 16);
+                memset(nullBuffer, 0x00, 16); // Create buffer of null bytes
 
                 if (!authenticateA(blocksArray[remainingBlock]))
                 {
@@ -508,39 +602,50 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
                     Serial.println("Cleared block " + String(blocksArray[remainingBlock]));
                 }
             }
-            break;
+            break; // Exit loop after clearing remaining blocks
         }
     }
 
-    // Halt PICC
-    rfid.PICC_HaltA();
-    // Stop encryption on PCD
-    rfid.PCD_StopCrypto1();
+    // Properly terminate RFID communication
+    rfid.PICC_HaltA();      // Put card to sleep
+    rfid.PCD_StopCrypto1(); // Stop encryption on reader
 
     Serial.println("Write operation completed successfully.");
     Serial.println();
 
-    return true; // return true to indicate success
+    return true; // All operations completed successfully
 }
 
-/****************************************************************************/
-/****************************************************************************/
-/****************************************************************************/
+// ============================================================================
+// SYSTEM OUTPUT CONTROL
+// ============================================================================
 
-// Function to execute action based on validity
-// Definire la funzione in base al lavoro che si deve fare
+/**
+ * @brief Execute access control action based on validation result
+ * @details Controls the physical outputs of the system (relay, lock mechanism, etc.)
+ *          based on whether a valid passphrase was detected. This function defines
+ *          the actual security action taken when access is granted or denied.
+ *
+ * @param valid true = activate access control (grant access), false = deactivate (deny access)
+ *
+ * @note Current implementation provides 1-second pulse output for valid access
+ * @note Customize this function based on specific hardware requirements (relay, servo, etc.)
+ * @note Both ACTION_PIN and ALARM_PIN are controlled together for redundant signaling
+ */
 void executeAction(bool valid)
 {
     if (valid)
     {
-        digitalWrite(ACTION_PIN, HIGH);
-        digitalWrite(ALARM_PIN, HIGH);
-        delay(1000); // keep the action pin HIGH for 1 second
-        digitalWrite(ACTION_PIN, LOW);
+        // Grant access: activate outputs for 1 second
+        digitalWrite(ACTION_PIN, HIGH); // Main action output (e.g., unlock relay)
+        digitalWrite(ALARM_PIN, HIGH);  // Secondary confirmation signal
+        delay(1000);                    // Hold active state for 1 second
+        digitalWrite(ACTION_PIN, LOW);  // Return to inactive state
         digitalWrite(ALARM_PIN, LOW);
     }
     else
     {
+        // Deny access: ensure all outputs are inactive
         digitalWrite(ACTION_PIN, LOW);
         digitalWrite(ALARM_PIN, LOW);
     }
