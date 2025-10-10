@@ -7,7 +7,6 @@
  *          - WRITE mode: Programs new cards with the current passphrase
  *          Additionally, it supports SET mode for updating the master passphrase.
  * @author Dag
- * @version 1.0.0
  */
 
 // Required libraries for RFID, LCD, and system functionality
@@ -19,6 +18,7 @@
 #include "dag-timer.h"  // Custom timer library for periodic tasks
 #include "def.h"        // Pin definitions, constants, and utility functions
 #include "data.h"       // Data storage
+#include "lcd.h"        // LCD display management functions
 
 // ============================================================================
 // HARDWARE INITIALIZATION
@@ -35,6 +35,9 @@ DagTimer blinkTimer; // Generates periodic signals to indicate SET mode is activ
 MFRC522 rfid(SS_PIN, RST_PIN); // RFID reader instance using SPI communication
 MFRC522::MIFARE_Key key;       // Cryptographic key for card authentication (read/write operations)
 
+// LCD display for user feedback (16x2 character display)
+LCD_I2C lcd(0x27, 16, 2); // I2C address 0x27, 16 columns, 2 rows (SDA=A4, SCL=A5)
+
 // ============================================================================
 // SYSTEM STATE VARIABLES
 // ============================================================================
@@ -42,10 +45,6 @@ MFRC522::MIFARE_Key key;       // Cryptographic key for card authentication (rea
 Mode MODE = MODE_READ;      // Current operational mode: READ (validate cards) or WRITE (program cards)
 Job JOB = RUN;              // Current job type: RUN (normal operation) or SET (passphrase programming)
 Agent AGENT = AGENT_WRITER; // Device role identifier (WRITER variant of the RFID box system)
-
-// LCD display for user feedback (16x2 character display)
-LCD_I2C lcd(0x27, 16, 2);  // I2C address 0x27, 16 columns, 2 rows (SDA=A4, SCL=A5)
-String VERSION = "v1.0.0"; // Firmware version for display and serial output
 
 // ============================================================================
 // RUNTIME STATE FLAGS AND DATA
@@ -88,14 +87,16 @@ void setup()
     pinMode(ERROR_PIN, OUTPUT);  // Error state indicator
 
     // Display system information via serial
-    Serial.println("RFID Box " + VERSION);
-    Serial.println("Reader details:");
+    Serial.print(F("RFID Box "));
+    Serial.println(VERSION);
+    Serial.println(F("Reader details:"));
     rfid.PCD_DumpVersionToSerial(); // Display RFID reader hardware information
 
     // Load master passphrase from persistent storage
-    Serial.println("reading passphrase from eeprom...");
+    Serial.println(F("reading passphrase from eeprom..."));
     loadPayloadFromEEPROM(&passphrase);
-    Serial.println("Passphrase: " + passphrase);
+    Serial.print(F("Passphrase: "));
+    Serial.println(passphrase);
     Serial.println();
 
     // Initialize RFID authentication key
@@ -104,6 +105,10 @@ void setup()
     for (byte i = 0; i < MFRC522::MF_KEY_SIZE; i++)
         key.keyByte[i] = 0xFF;
     // key.keyByte[i] = cryptokey[i]; // Uncomment to use custom key
+
+    // Initialize LCD display and show welcome message
+    lcd_init(&lcd, VERSION);
+    lcd_idle(&lcd, MODE, JOB);
 
     // Initialize system state
     executeAction(false); // Ensure all outputs are in safe/inactive state
@@ -144,14 +149,23 @@ void loop()
 
     // Attempt to read card serial number - exit if communication fails
     if (!rfid.PICC_ReadCardSerial())
+    {
+        Serial.println(F("Failed to read card serial."));
+        lcd_uid_reading_error(&lcd);
+        beep(3); // Triple beep indicates read error
+        delay(1000);
+        lcd_idle(&lcd, MODE, JOB);
         return;
+    }
 
     // ========================================================================
     // CARD PROCESSING BEGINS
     // ========================================================================
 
-    fired = true;                        // Set flag indicating card processing is active
-    Serial.println(F("Card detected:")); // Log card detection event
+    fired = true;                // Set flag indicating card processing is active
+    uid = uidToString(rfid.uid); // Get the UID of the card as a string
+    Serial.print(F("Card detected UID: "));
+    Serial.println(uid); // Log card detection event
     Serial.println();
 
     // ========================================================================
@@ -162,7 +176,10 @@ void loop()
         // Verify card compatibility with MIFARE Classic standard
         if (!checkCompatibility())
         {
+            beep(3);                       // Triple beep indicates compatibility error
+            lcd_compatibility_error(&lcd); // Display compatibility error on LCD
             triggerErrorAndWaitForReset(&btnReset, &fired);
+            lcd_idle(&lcd, MODE, JOB);
             return;
         }
 
@@ -170,7 +187,19 @@ void loop()
         if (btnReset.clicked())
         {
             rfid.PICC_DumpToSerial(&(rfid.uid)); // Output complete card structure to serial
-            return;
+            beep(1, 1000);                       // Long beep indicates dump completed
+            lcd_show_uid(&lcd, uid);             // Display UID on LCD
+
+            while (fired)
+            {
+                if (btnReset.pressed())
+                {
+                    fired = false; // Clear processing flag
+                    lcd_idle(&lcd, MODE, JOB);
+                    return;
+                }
+                delay(100);
+            }
         }
 
         // ====================================================================
@@ -187,60 +216,71 @@ void loop()
             // Reading failed - provide error feedback and wait for user reset
             beep(3);                                        // Triple beep indicates read error
             triggerErrorAndWaitForReset(&btnReset, &fired); // Enter error state
+            lcd_idle(&lcd, MODE, JOB);
+            return;
         }
-        else
+
+        // ================================================================
+        // SET MODE: PASSPHRASE PROGRAMMING
+        // ================================================================
+        if (JOB == SET)
         {
-            // ================================================================
-            // SET MODE: PASSPHRASE PROGRAMMING
-            // ================================================================
-            if (JOB == SET)
+            // In SET mode, use the read passphrase to update the master passphrase
+            bool saved = savePayloadToEEPROM(&value);
+
+            if (!saved)
             {
-                // In SET mode, use the read passphrase to update the master passphrase
-                passphrase = value; // Update master passphrase with card data
-                bool saved = savePayloadToEEPROM(&passphrase);
-
-                if (!saved)
-                {
-                    // EEPROM save failed
-                    triggerErrorAndWaitForReset(&btnReset, &fired);
-                    JOB = RUN; // Return to normal operation mode
-                    return;
-                }
-
-                // Passphrase successfully saved - provide confirmation
-                beep(1, 1000); // Long success beep
-                while (fired)  // Wait for user acknowledgment via reset button
-                {
-                    if (btnReset.pressed())
-                    {
-                        fired = false; // Clear processing flag
-                        JOB = RUN;     // Return to normal operation mode
-                        return;
-                    }
-                    delay(100);
-                }
+                // EEPROM save failed
+                beep(3); // Triple beep indicates error
+                lcd_EEPROM_writing_error(&lcd);
+                triggerErrorAndWaitForReset(&btnReset, &fired);
+                JOB = RUN; // Return to normal operation mode
+                lcd_idle(&lcd, MODE, JOB);
+                return;
             }
 
-            // ================================================================
-            // RUN MODE: ACCESS VALIDATION
-            // ================================================================
+            // Passphrase successfully saved - provide confirmation
+            passphrase = value; // Update master passphrase with card data
+            beep(1, 1000);      // Long success beep
+            lcd_passphrase_set_success(&lcd);
+            while (fired) // Wait for user acknowledgment via reset button
+            {
+                if (btnReset.pressed())
+                {
+                    fired = false; // Clear processing flag
+                    JOB = RUN;     // Return to normal operation mode
+                    lcd_idle(&lcd, MODE, JOB);
+                    return; // ESCE dalla modalità SET dopo che ha settato la passphrase
+                }
+                delay(100);
+            }
+        }
+
+        // ================================================================
+        // RUN MODE: ACCESS VALIDATION
+        // ================================================================
+        else if (JOB == RUN)
+        {
+            // Compare read passphrase with stored master passphrase
+            VALID = (value == passphrase);
+
+            if (!VALID)
+            {
+                // Invalid passphrase - deny access
+                beep(3); // Triple beep indicates invalid card
+                lcd_invalid_passphrase(&lcd);
+                triggerErrorAndWaitForReset(&btnReset, &fired);
+                lcd_idle(&lcd, MODE, JOB);
+                return;
+            }
             else
             {
-                // Compare read passphrase with stored master passphrase
-                VALID = (value == passphrase);
-
-                if (!VALID)
-                {
-                    // Invalid passphrase - deny access
-                    triggerErrorAndWaitForReset(&btnReset, &fired);
-                    return;
-                }
-                else
-                {
-                    // Valid passphrase - grant access
-                    beep(1, 600);        // Success confirmation beep
-                    executeAction(true); // Activate access control mechanism
-                }
+                // Valid passphrase - grant access
+                beep(1, 600);        // Success confirmation beep
+                executeAction(true); // Activate access control mechanism
+                lcd_reading_success(&lcd);
+                delay(3000);
+                lcd_idle(&lcd, MODE, JOB);
             }
         }
     }
@@ -253,11 +293,12 @@ void loop()
         // Verify card compatibility before attempting write operations
         if (!checkCompatibility())
         {
+            beep(3); // Triple beep indicates compatibility error
+            lcd_compatibility_error(&lcd);
             triggerErrorAndWaitForReset(&btnReset, &fired);
+            lcd_idle(&lcd, MODE, JOB);
             return;
         }
-
-        Serial.println("Write mode switched on");
 
         // Write current master passphrase to all configured blocks on the card
         int blocksCount = sizeof(blocks) / sizeof(blocks[0]);
@@ -265,20 +306,20 @@ void loop()
 
         if (result)
         {
-            Serial.println("Write operation completed successfully");
-            // Note: LCD feedback could be added here if display is connected
+            Serial.println(F("Write operation completed successfully"));
+            beep(1, 1000); // Long beep indicates write operation finished
+            lcd_writing_success(&lcd);
         }
         else
         {
-            Serial.println("Write operation failed");
-            // Note: LCD error display could be added here
+            Serial.println(F("Write operation failed"));
+            beep(3); // Triple beep indicates write error
+            // Note: LCD error are already displayed into writeTag function
         }
-
-        // Provide audio confirmation of write completion
-        beep(1, 1000); // Long beep indicates write operation finished
 
         // Enter waiting state until user acknowledges with reset button
         triggerErrorAndWaitForReset(&btnReset, &fired);
+        lcd_idle(&lcd, MODE, JOB);
     }
 
     // ========================================================================
@@ -308,7 +349,8 @@ void toggleMode()
     if (MODE == MODE_WRITE)
         JOB = RUN;
 
-    Serial.println(MODE == MODE_READ ? "Read mode selected" : "Write mode selected");
+    lcd_idle(&lcd, MODE, JOB);
+    Serial.println(MODE == MODE_READ ? F("Read mode selected") : F("Write mode selected"));
 }
 
 /**
@@ -327,7 +369,8 @@ void toggleJob()
     else
         beep(5); // Multiple beeps confirm job mode change (only in READ mode)
 
-    Serial.println(JOB == RUN ? "Job: RUN" : "Job: SET");
+    lcd_idle(&lcd, MODE, JOB);
+    Serial.println(JOB == RUN ? F("Job: RUN") : F("Job: SET"));
 }
 
 /**
@@ -342,6 +385,8 @@ void blinkIfSetMode()
         return; // No indication needed in normal operation mode
     else if (JOB == SET)
         beep(1, 250, 50); // Short, quiet beep indicates SET mode is active
+
+    lcd_idle(&lcd, MODE, JOB);
 }
 
 // ============================================================================
@@ -424,9 +469,11 @@ String readTag(int *blocksArray, int blocksCount)
         // Authenticate before reading each block
         if (!authenticateA(currentBlock))
         {
-            Serial.println("CRITICAL ERROR: Authentication failed for block " + String(currentBlock));
-            Serial.println("Stopping read operation due to authentication failure.");
+            Serial.print(F("CRITICAL ERROR: Authentication failed for block "));
+            Serial.println(currentBlock);
+            Serial.println(F("Stopping read operation due to authentication failure."));
             Serial.println();
+            lcd_authentication_error(&lcd);
             return ""; // Authentication failure is critical - abort entire operation
         }
 
@@ -438,8 +485,9 @@ String readTag(int *blocksArray, int blocksCount)
             Serial.print(currentBlock);
             Serial.print(F(": "));
             Serial.println(rfid.GetStatusCodeName(status));
-            Serial.println("Stopping read operation due to read failure.");
+            Serial.println(F("Stopping read operation due to read failure."));
             Serial.println();
+            lcd_read_block_error(&lcd, currentBlock);
             return ""; // Read failure is critical - abort entire operation
         }
         else
@@ -454,13 +502,18 @@ String readTag(int *blocksArray, int blocksCount)
             // Convert binary data to ASCII string
             blockValue = bufferToString(buffer, len - 2);
             blockValue.trim(); // Remove leading/trailing whitespace
-            Serial.println("Block " + String(currentBlock) + " content: " + blockValue);
+            Serial.print(F("Block "));
+            Serial.print(currentBlock);
+            Serial.print(F(" content: "));
+            Serial.println(blockValue);
             Serial.println();
 
             // Check for empty block - indicates end of passphrase data
             if (blockValue.length() == 0)
             {
-                Serial.println("Found empty block " + String(currentBlock) + ", stopping read operation.");
+                Serial.print(F("Found empty block "));
+                Serial.print(currentBlock);
+                Serial.println(F(", stopping read operation."));
                 Serial.println();
                 break; // Stop reading when empty block is found
             }
@@ -473,7 +526,8 @@ String readTag(int *blocksArray, int blocksCount)
     // Clean up the final result
     finalValue.trim();
 
-    Serial.println("Final concatenated value: " + finalValue);
+    Serial.print(F("Final concatenated value: "));
+    Serial.println(finalValue);
     Serial.println();
 
     // Properly terminate RFID communication
@@ -505,8 +559,10 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
     int dataIndex = 0; // Current position in the source data string
 
     Serial.println(F("Writing data to all blocks..."));
-    Serial.println("Data to write: " + *data);
-    Serial.println("Data length: " + String(dataLength));
+    Serial.print(F("Data to write: "));
+    Serial.println(*data);
+    Serial.print(F("Data length: "));
+    Serial.println(dataLength);
     Serial.println();
 
     // Process each block in sequence
@@ -535,9 +591,11 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
         // Authenticate before writing to each block
         if (!authenticateA(currentBlock))
         {
-            Serial.println("CRITICAL ERROR: Authentication failed for block " + String(currentBlock));
-            Serial.println("Stopping write operation due to authentication failure.");
+            Serial.print(F("CRITICAL ERROR: Authentication failed for block "));
+            Serial.println(currentBlock);
+            Serial.println(F("Stopping write operation due to authentication failure."));
             Serial.println();
+            lcd_authentication_error(&lcd);
             return false; // Authentication failure is critical - abort operation
         }
 
@@ -549,8 +607,9 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
             Serial.print(currentBlock);
             Serial.print(F(": "));
             Serial.println(rfid.GetStatusCodeName(status));
-            Serial.println("Stopping write operation due to write failure.");
+            Serial.println(F("Stopping write operation due to write failure."));
             Serial.println();
+            lcd_write_block_error(&lcd);
             return false; // Write failure is critical - abort operation
         }
         else
@@ -573,7 +632,7 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
         // Check if all data has been written
         if (dataIndex >= dataLength)
         {
-            Serial.println("All data written successfully. Remaining blocks will be cleared.");
+            Serial.println(F("All data written successfully. Remaining blocks will be cleared."));
             Serial.println();
 
             // Clear any remaining blocks to ensure no old data remains
@@ -584,7 +643,10 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
 
                 if (!authenticateA(blocksArray[remainingBlock]))
                 {
-                    Serial.println("CRITICAL ERROR: Authentication failed for clearing block " + String(blocksArray[remainingBlock]));
+                    Serial.print(F("CRITICAL ERROR: Authentication failed for clearing block "));
+                    Serial.println(blocksArray[remainingBlock]);
+                    Serial.println(F("Stopping write operation due to authentication failure."));
+                    lcd_authentication_error(&lcd);
                     return false;
                 }
 
@@ -595,11 +657,14 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
                     Serial.print(blocksArray[remainingBlock]);
                     Serial.print(F(": "));
                     Serial.println(rfid.GetStatusCodeName(clearStatus));
+                    Serial.println(F("Stopping write operation due to write failure."));
+                    lcd_write_block_error(&lcd);
                     return false;
                 }
                 else
                 {
-                    Serial.println("Cleared block " + String(blocksArray[remainingBlock]));
+                    Serial.print(F("Cleared block "));
+                    Serial.println(blocksArray[remainingBlock]);
                 }
             }
             break; // Exit loop after clearing remaining blocks
@@ -610,7 +675,7 @@ bool writeTag(String *data, int *blocksArray, int blocksCount)
     rfid.PICC_HaltA();      // Put card to sleep
     rfid.PCD_StopCrypto1(); // Stop encryption on reader
 
-    Serial.println("Write operation completed successfully.");
+    Serial.println(F("Write operation completed successfully."));
     Serial.println();
 
     return true; // All operations completed successfully

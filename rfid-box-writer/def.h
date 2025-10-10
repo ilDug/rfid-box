@@ -6,7 +6,6 @@
  *          the RFID Box Writer system. It serves as the central configuration file
  *          for hardware abstraction and system constants.
  * @author Dag
- * @version 1.0.0
  */
 
 #ifndef DAG_CONSTANTS_H
@@ -511,9 +510,6 @@ void triggerErrorAndWaitForReset(DagButton *btn, bool *fired)
         }
         delay(100); // Prevent excessive polling and reduce power consumption
     }
-
-    // Note: LCD idle display could be restored here if implemented
-    // lcd_idle(&lcd, mode, block);
 }
 
 #endif // DAG_CONSTANTS_H
