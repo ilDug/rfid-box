@@ -30,7 +30,7 @@
  * @return true se l'inizializzazione è completata con successo, false altrimenti
  *
  */
-bool lcd_init(LCD_I2C *lcd, String version)
+bool lcd_init(LCD_I2C *lcd, const String &version)
 {
     // Passo 1: Inizializzazione hardware del display LCD
     lcd->begin();
@@ -39,11 +39,12 @@ bool lcd_init(LCD_I2C *lcd, String version)
     // Passo 3: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 4: Visualizzazione del messaggio di benvenuto principale
-    lcd->print("RFID BOX ");
+    lcd->print(F("RFID BOX "));
     // Passo 5: Spostamento del cursore alla seconda riga (riga 1, colonna 0)
     lcd->setCursor(0, 1);
     // Passo 6: Visualizzazione della versione del firmware
-    lcd->print("Version " + version);
+    lcd->print(F("Version "));
+    lcd->print(version);
     // Passo 7: Pausa di 2 secondi per permettere all'utente di leggere il messaggio
     delay(2000);
     // Passo 8: Pulizia completa dello schermo per prepararlo all'uso normale
@@ -67,21 +68,21 @@ bool lcd_init(LCD_I2C *lcd, String version)
 void lcd_idle(LCD_I2C *lcd, Mode mode, Job job)
 {
     // Passo 1: Determinazione del messaggio di modalità basato sui parametri di stato
-    String modeStr;
+    const __FlashStringHelper *modeStr;
     if (job == SET)
     {
         // Modalità SET ha priorità: permette di aggiornare la passphrase master
-        modeStr = "SETTING mode.";
+        modeStr = F("SETTING mode.");
     }
     else if (mode == MODE_READ)
     {
         // Modalità lettura: validazione delle carte contro la passphrase memorizzata
-        modeStr = "READING mode.";
+        modeStr = F("READING mode.");
     }
-    else
+    else if (mode == MODE_WRITE)
     {
         // Modalità scrittura: programmazione di nuove carte con la passphrase corrente
-        modeStr = "WRITING mode.";
+        modeStr = F("WRITING mode.");
     }
 
     // Passo 2: Pulizia completa del display per rimuovere contenuto precedente
@@ -93,9 +94,11 @@ void lcd_idle(LCD_I2C *lcd, Mode mode, Job job)
     // Passo 5: Spostamento del cursore alla seconda riga (riga 1, colonna 0)
     lcd->setCursor(0, 1);
     // Passo 6: Visualizzazione del messaggio di attesa carta
-    lcd->print("Waiting card...");
+    lcd->print(F("Waiting card..."));
     // Passo 7: Output aggiuntivo su Serial Monitor per scopi di debug e monitoraggio
-    Serial.println(modeStr + " Waiting card...");
+    Serial.print(modeStr);
+    Serial.print(F(" "));
+    Serial.println(F("Waiting card..."));
     Serial.println(); // Riga vuota per migliorare la leggibilità del log
 }
 
@@ -110,11 +113,11 @@ void lcd_compatibility_error(LCD_I2C *lcd)
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione del messaggio di errore di compatibilità
-    lcd->print("Incompatible");
+    lcd->print(F("Incompatible"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Visualizzazione del dettaglio dell'errore
-    lcd->print("card type!");
+    lcd->print(F("card type!"));
 }
 
 /**
@@ -122,14 +125,14 @@ void lcd_compatibility_error(LCD_I2C *lcd)
  * Mostra l'identificativo univoco della carta con scorrimento automatico per UID lunghi
  * @param uid Stringa contenente l'UID della carta da visualizzare
  */
-void lcd_show_uid(LCD_I2C *lcd, String uid)
+void lcd_show_uid(LCD_I2C *lcd, const String &uid)
 {
     // Passo 1: Pulizia completa del display per rimuovere contenuto precedente
     lcd->clear();
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione dell'etichetta per l'UID
-    lcd->print("Card UID:");
+    lcd->print(F("Card UID:"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Attivazione dello scorrimento automatico per UID lunghi
@@ -151,11 +154,11 @@ void lcd_authentication_error(LCD_I2C *lcd)
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione dell'intestazione di errore
-    lcd->print("ERROR!!!");
+    lcd->print(F("ERROR!!!"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Visualizzazione del dettaglio dell'errore di autenticazione
-    lcd->print("auth failure!");
+    lcd->print(F("auth failure!"));
 }
 
 /**
@@ -170,11 +173,12 @@ void lcd_read_block_error(LCD_I2C *lcd, byte block)
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione del messaggio di errore di lettura
-    lcd->print("Read error on");
+    lcd->print(F("Read error on"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Visualizzazione del numero del blocco con errore
-    lcd->print("block " + String(block));
+    lcd->print(F("block "));
+    lcd->print(block);
 }
 
 /**
@@ -188,11 +192,11 @@ void lcd_invalid_passphrase(LCD_I2C *lcd)
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione del messaggio di passphrase non valida
-    lcd->print("INVALID");
+    lcd->print(F("INVALID"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Visualizzazione del dettaglio dell'errore
-    lcd->print("passphrase!");
+    lcd->print(F("passphrase!"));
 }
 
 /**
@@ -206,11 +210,11 @@ void lcd_EEPROM_writing_error(LCD_I2C *lcd)
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione dell'intestazione di errore
-    lcd->print("ERROR!!!");
+    lcd->print(F("ERROR!!!"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Visualizzazione del dettaglio dell'errore EEPROM
-    lcd->print("EEPROM write!");
+    lcd->print(F("EEPROM write!"));
 }
 
 /**
@@ -224,11 +228,11 @@ void lcd_uid_reading_error(LCD_I2C *lcd)
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione dell'intestazione di errore
-    lcd->print("ERROR!!!");
+    lcd->print(F("ERROR!!!"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Visualizzazione del dettaglio dell'errore di lettura UID
-    lcd->print("reading uid!");
+    lcd->print(F("reading uid!"));
 }
 
 /**
@@ -242,11 +246,11 @@ void lcd_passphrase_set_success(LCD_I2C *lcd)
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione del messaggio di successo
-    lcd->print("SUCCESS!!!");
+    lcd->print(F("SUCCESS!!!"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Visualizzazione della conferma di impostazione passphrase
-    lcd->print("Passphrase set");
+    lcd->print(F("Passphrase set"));
 }
 
 /**
@@ -260,11 +264,11 @@ void lcd_reading_success(LCD_I2C *lcd)
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione del messaggio di successo
-    lcd->print("reading success");
+    lcd->print(F("reading success"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Visualizzazione del messaggio di accesso garantito
-    lcd->print("APRITI SESAMO !");
+    lcd->print(F("APRITI SESAMO !"));
 }
 
 /**
@@ -278,11 +282,11 @@ void lcd_writing_success(LCD_I2C *lcd)
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione del messaggio di successo
-    lcd->print("writing success");
+    lcd->print(F("writing success"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Visualizzazione del messaggio di conferma scrittura
-    lcd->print("Card programmed");
+    lcd->print(F("Card programmed"));
 }
 
 void lcd_write_block_error(LCD_I2C *lcd)
@@ -292,11 +296,11 @@ void lcd_write_block_error(LCD_I2C *lcd)
     // Passo 2: Posizionamento del cursore in posizione home (prima riga, prima colonna)
     lcd->home();
     // Passo 3: Visualizzazione del messaggio di errore di scrittura
-    lcd->print("Writing ERROR!");
+    lcd->print(F("Writing ERROR!"));
     // Passo 4: Spostamento alla seconda riga
     lcd->setCursor(0, 1);
     // Passo 5: Visualizzazione del numero del blocco con errore
-    lcd->print("remove card!");
+    lcd->print(F("remove card!"));
 }
 
 #endif // LCD_MANAGER_H
