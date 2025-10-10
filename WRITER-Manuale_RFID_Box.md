@@ -157,13 +157,15 @@ Nella modalità di scrittura, il dispositivo:
 ### EEPROM
 - **Contenuto**: Passphrase di riferimento
 - **Gestione**: Caricamento all'avvio, salvataggio in modalità SET
-- **Sicurezza**: Validazione caratteri ASCII stampabili
+- **Limiti**: Massimo 500 caratteri per sicurezza, solo caratteri ASCII stampabili (32-126)
+- **Sicurezza**: Validazione caratteri, pulizia completa prima della scrittura
 
 ### Card RFID
-- **Settori utilizzati**: 15 settori (dal settore 1 al 15)
-- **Blocchi per settore**: 3 blocchi (45 blocchi totali)
-- **Capacità**: 720 bytes (~135 caratteri)
-- **Distribuzione**: Dati distribuiti sequenzialmente sui blocchi
+- **Settori utilizzati**: 15 settori (dal settore 1 al 15, settore 0 escluso per sicurezza)
+- **Blocchi per settore**: 3 blocchi dati (45 blocchi totali)
+- **Capacità fisica**: 720 bytes (45 blocchi × 16 bytes)
+- **Limite passphrase**: 500 caratteri (limite EEPROM di sicurezza)
+- **Distribuzione**: Dati distribuiti sequenzialmente sui blocchi dati (esclusi i blocchi di controllo)
 
 ## Monitor Seriale
 
@@ -186,7 +188,11 @@ String mainPassphrase = "soJ0ijae1yee2yohChoop6ieshohrex5eeVuk7Cooghiu5She5Ohpai
 ```
 
 ### Blocchi RFID Utilizzati
-I blocchi sono definiti in `def.h` e includono 3 blocchi per ogni settore (evitando i blocchi di controllo).
+I blocchi sono definiti in `def.h` e includono 3 blocchi dati per ogni settore (dal settore 1 al 15), evitando deliberatamente:
+- **Settore 0**: Riservato per informazioni del produttore e UID
+- **Blocchi di controllo**: Un blocco ogni 4 (blocchi 3, 7, 11, 15, ecc.) utilizzati per chiavi di accesso
+
+La configurazione utilizza quindi i blocchi: 4-6, 8-10, 12-14, 16-18, 20-22, 24-26, 28-30, 32-34, 36-38, 40-42, 44-46, 48-50, 52-54, 56-58, 60-62.
 
 ## Utilizzo Tipico
 

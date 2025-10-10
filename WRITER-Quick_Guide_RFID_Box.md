@@ -83,6 +83,8 @@ Sistema Arduino per lettura/scrittura tessere RFID MIFARE Classic con autenticaz
 
 ## Note Tecniche
 - **Tessere supportate**: Solo MIFARE Classic
-- **Capacità**: 720 bytes (45 blocchi)
+- **Capacità fisica**: 720 bytes (45 blocchi dati)
+- **Limite passphrase**: 500 caratteri (sicurezza EEPROM)
+- **Settori utilizzati**: 1-15 (settore 0 escluso)
 - **Memoria**: Passphrase in EEPROM
 - **Debug**: Monitor seriale 9600 baud
