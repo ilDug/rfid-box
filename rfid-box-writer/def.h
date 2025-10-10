@@ -6,7 +6,6 @@
  *          the RFID Box Writer system. It serves as the central configuration file
  *          for hardware abstraction and system constants.
  * @author Dag
- * @version 1.0.0
  */
 
 #ifndef DAG_CONSTANTS_H
