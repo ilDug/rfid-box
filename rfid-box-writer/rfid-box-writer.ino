@@ -7,7 +7,6 @@
  *          - WRITE mode: Programs new cards with the current passphrase
  *          Additionally, it supports SET mode for updating the master passphrase.
  * @author Dag
- * @version 1.0.0
  */
 
 // Required libraries for RFID, LCD, and system functionality
@@ -36,6 +35,9 @@ DagTimer blinkTimer; // Generates periodic signals to indicate SET mode is activ
 MFRC522 rfid(SS_PIN, RST_PIN); // RFID reader instance using SPI communication
 MFRC522::MIFARE_Key key;       // Cryptographic key for card authentication (read/write operations)
 
+// LCD display for user feedback (16x2 character display)
+LCD_I2C lcd(0x27, 16, 2); // I2C address 0x27, 16 columns, 2 rows (SDA=A4, SCL=A5)
+
 // ============================================================================
 // SYSTEM STATE VARIABLES
 // ============================================================================
@@ -43,10 +45,6 @@ MFRC522::MIFARE_Key key;       // Cryptographic key for card authentication (rea
 Mode MODE = MODE_READ;      // Current operational mode: READ (validate cards) or WRITE (program cards)
 Job JOB = RUN;              // Current job type: RUN (normal operation) or SET (passphrase programming)
 Agent AGENT = AGENT_WRITER; // Device role identifier (WRITER variant of the RFID box system)
-
-// LCD display for user feedback (16x2 character display)
-LCD_I2C lcd(0x27, 16, 2);  // I2C address 0x27, 16 columns, 2 rows (SDA=A4, SCL=A5)
-const String VERSION = "v1.0.0"; // Firmware version for display and serial output
 
 // ============================================================================
 // RUNTIME STATE FLAGS AND DATA
@@ -164,8 +162,8 @@ void loop()
     // CARD PROCESSING BEGINS
     // ========================================================================
 
-    fired = true;                                   // Set flag indicating card processing is active
-    uid = uidToString(rfid.uid);                    // Get the UID of the card as a string
+    fired = true;                // Set flag indicating card processing is active
+    uid = uidToString(rfid.uid); // Get the UID of the card as a string
     Serial.print(F("Card detected UID: "));
     Serial.println(uid); // Log card detection event
     Serial.println();
@@ -221,70 +219,68 @@ void loop()
             lcd_idle(&lcd, MODE, JOB);
             return;
         }
-        else
+
+        // ================================================================
+        // SET MODE: PASSPHRASE PROGRAMMING
+        // ================================================================
+        if (JOB == SET)
         {
-            // ================================================================
-            // SET MODE: PASSPHRASE PROGRAMMING
-            // ================================================================
-            if (JOB == SET)
+            // In SET mode, use the read passphrase to update the master passphrase
+            bool saved = savePayloadToEEPROM(&value);
+
+            if (!saved)
             {
-                // In SET mode, use the read passphrase to update the master passphrase
-                bool saved = savePayloadToEEPROM(&value);
-
-                if (!saved)
-                {
-                    // EEPROM save failed
-                    beep(3); // Triple beep indicates error
-                    lcd_EEPROM_writing_error(&lcd);
-                    triggerErrorAndWaitForReset(&btnReset, &fired);
-                    JOB = RUN; // Return to normal operation mode
-                    lcd_idle(&lcd, MODE, JOB);
-                    return;
-                }
-
-                // Passphrase successfully saved - provide confirmation
-                passphrase = value; // Update master passphrase with card data
-                beep(1, 1000);      // Long success beep
-                lcd_passphrase_set_success(&lcd);
-                while (fired) // Wait for user acknowledgment via reset button
-                {
-                    if (btnReset.pressed())
-                    {
-                        fired = false; // Clear processing flag
-                        JOB = RUN;     // Return to normal operation mode
-                        lcd_idle(&lcd, MODE, JOB);
-                        return; // ESCE dalla modalità SET dopo che ha settato la passphrase
-                    }
-                    delay(100);
-                }
+                // EEPROM save failed
+                beep(3); // Triple beep indicates error
+                lcd_EEPROM_writing_error(&lcd);
+                triggerErrorAndWaitForReset(&btnReset, &fired);
+                JOB = RUN; // Return to normal operation mode
+                lcd_idle(&lcd, MODE, JOB);
+                return;
             }
 
-            // ================================================================
-            // RUN MODE: ACCESS VALIDATION
-            // ================================================================
+            // Passphrase successfully saved - provide confirmation
+            passphrase = value; // Update master passphrase with card data
+            beep(1, 1000);      // Long success beep
+            lcd_passphrase_set_success(&lcd);
+            while (fired) // Wait for user acknowledgment via reset button
+            {
+                if (btnReset.pressed())
+                {
+                    fired = false; // Clear processing flag
+                    JOB = RUN;     // Return to normal operation mode
+                    lcd_idle(&lcd, MODE, JOB);
+                    return; // ESCE dalla modalità SET dopo che ha settato la passphrase
+                }
+                delay(100);
+            }
+        }
+
+        // ================================================================
+        // RUN MODE: ACCESS VALIDATION
+        // ================================================================
+        else if (JOB == RUN)
+        {
+            // Compare read passphrase with stored master passphrase
+            VALID = (value == passphrase);
+
+            if (!VALID)
+            {
+                // Invalid passphrase - deny access
+                beep(3); // Triple beep indicates invalid card
+                lcd_invalid_passphrase(&lcd);
+                triggerErrorAndWaitForReset(&btnReset, &fired);
+                lcd_idle(&lcd, MODE, JOB);
+                return;
+            }
             else
             {
-                // Compare read passphrase with stored master passphrase
-                VALID = (value == passphrase);
-
-                if (!VALID)
-                {
-                    // Invalid passphrase - deny access
-                    beep(3); // Triple beep indicates invalid card
-                    lcd_invalid_passphrase(&lcd);
-                    triggerErrorAndWaitForReset(&btnReset, &fired);
-                    lcd_idle(&lcd, MODE, JOB);
-                    return;
-                }
-                else
-                {
-                    // Valid passphrase - grant access
-                    beep(1, 600);        // Success confirmation beep
-                    executeAction(true); // Activate access control mechanism
-                    lcd_reading_success(&lcd);
-                    delay(3000);
-                    lcd_idle(&lcd, MODE, JOB);
-                }
+                // Valid passphrase - grant access
+                beep(1, 600);        // Success confirmation beep
+                executeAction(true); // Activate access control mechanism
+                lcd_reading_success(&lcd);
+                delay(3000);
+                lcd_idle(&lcd, MODE, JOB);
             }
         }
     }
