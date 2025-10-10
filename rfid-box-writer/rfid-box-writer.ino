@@ -206,9 +206,8 @@ void loop()
         // READ CARD DATA
         // ====================================================================
 
-        value = "";                                           // Clear previous read data
-        int blocksCount = sizeof(blocks) / sizeof(blocks[0]); // Calculate total blocks to read
-        value = readTag(blocks, blocksCount);                 // Read passphrase from all configured blocks
+        value = "";                            // Clear previous read data
+        value = readTag(blocks, BLOCKS_COUNT); // Read passphrase from all configured blocks
 
         // Handle read operation results
         if (value == "")
@@ -301,8 +300,7 @@ void loop()
         }
 
         // Write current master passphrase to all configured blocks on the card
-        int blocksCount = sizeof(blocks) / sizeof(blocks[0]);
-        bool result = writeTag(&passphrase, blocks, blocksCount);
+        bool result = writeTag(&passphrase, blocks, BLOCKS_COUNT);
 
         if (result)
         {
