@@ -33,14 +33,15 @@ SS     --> Pin 10
 ## Configurazione
 
 ### Personalizzazione della chiave
-Modifica la chiave personalizzata nel file `key-changer.ino`:
+La chiave personalizzata è ora sincronizzata automaticamente con il progetto principale.
+Modifica la chiave nel file `key-changer.ino` se necessario:
 
 ```cpp
-// La tua chiave personalizzata (CAMBIA QUESTO VALORE!)
-byte customKey[6] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC};
+// La tua chiave personalizzata (DEVE CORRISPONDERE a CRYPTO_KEY in data.cpp!)
+byte customKey[6] = {0x01, 0x02, 0x13, 0x51, 0x09, 0x0F};
 ```
 
-**IMPORTANTE**: Assicurati che questa chiave sia identica a `cryptokey` nel progetto principale RFID Box!
+**IMPORTANTE**: Questa chiave deve essere identica a `CRYPTO_KEY` definita in `data.cpp` del progetto principale!
 
 ## Utilizzo
 
@@ -120,8 +121,8 @@ Write failed: MF_WRITE_FAILED
 Dopo aver programmato le card con questo utility:
 
 1. Le card saranno protette con `customKey`
-2. Il sistema RFID Box potrà accedervi usando `cryptokey`
-3. **Assicurati che `customKey` = `cryptokey`**
+2. Il sistema RFID Box potrà accedervi usando `CRYPTO_KEY`
+3. **Assicurati che `customKey` = `CRYPTO_KEY`** (ora è automatico)
 
 ## Troubleshooting
 

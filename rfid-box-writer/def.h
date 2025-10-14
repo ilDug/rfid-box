@@ -69,14 +69,6 @@ const int ERROR_PIN = 3;  // Error State Indicator - Signals system errors and f
 const int SIGNAL1_PIN = A1; // Reserved Signal Pin 1 - Available for future features
 const int SIGNAL2_PIN = A2; // Reserved Signal Pin 2 - Available for future features
 
-/**
- * @brief MIFARE Classic Authentication Key - Declaration
- * @details External declaration of custom 6-byte key for MIFARE Classic card authentication.
- *          Alternative to factory default key (FFFFFFFFFFFF).
- *          Used for enhanced security when reading/writing card data.
- */
-extern byte cryptokey[MFRC522::MF_KEY_SIZE];
-
 // ============================================================================
 // SYSTEM STATE ENUMERATIONS
 // ============================================================================

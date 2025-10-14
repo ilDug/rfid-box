@@ -30,8 +30,8 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 // Factory default key (all cards come with this key)
 byte factoryKey[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
-// Your custom security key (CHANGE THIS TO YOUR DESIRED KEY!)
-byte customKey[6] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC};
+// Your custom security key (MUST MATCH crypto_key in data.cpp!)
+byte customKey[6] = {0x01, 0x02, 0x13, 0x51, 0x09, 0x0F};
 
 // Standard access bits for data blocks with custom key protection
 byte accessBits[4] = {0xFF, 0x07, 0x80, 0x69};

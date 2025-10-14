@@ -101,10 +101,10 @@ void setup()
 
     // Initialize RFID authentication key
     // Using factory default key (FFFFFFFFFFFF) for MIFARE Classic cards
-    // Alternative: use custom cryptographic key from def.h
+    // Alternative: use custom cryptographic key from data.h
     for (byte i = 0; i < MFRC522::MF_KEY_SIZE; i++)
-        key.keyByte[i] = 0xFF;
-    // key.keyByte[i] = cryptokey[i]; // Uncomment to use custom key
+        key.keyByte[i] = default_key[i]; // default_key is defined in data.h
+    // key.keyByte[i] = crypto_key[i]; // Uncomment to use custom key
 
     // Initialize LCD display and show welcome message
     lcd_init(&lcd, VERSION);

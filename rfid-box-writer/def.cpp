@@ -15,13 +15,6 @@
 // ============================================================================
 
 /**
- * @brief MIFARE Classic Authentication Key
- * @details Custom 6-byte key for MIFARE Classic card authentication.
- *          Alternative to factory default key (FFFFFFFFFFFF).
- */
-byte cryptokey[MFRC522::MF_KEY_SIZE] = {0x01, 0x02, 0x13, 0x51, 0x09, 0x0F};
-
-/**
  * @brief Primary Block Array for Data Storage
  * @details List of MIFARE Classic 1K blocks available for passphrase storage.
  *          Each block contains 16 bytes of data, totaling 720 bytes (45 blocks × 16 bytes).
