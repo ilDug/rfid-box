@@ -301,19 +301,4 @@ void loadPayloadFromEEPROM(String *payload);
  */
 void triggerErrorAndWaitForReset(DagButton *btn, bool *fired);
 
-// +===========================================================================
-// KEY MANAGEMENT FUNCTION DECLARATIONS
-// +===========================================================================
-
-/**
- * Function to change the sector key for a specific MIFARE Classic sector
- * @param trailerBlock The trailer block number of the sector to change
- * @param mfrc522 Reference to the MFRC522 instance used for communication
- * @param newKey Pointer to the new 6-byte key to set for the sector
- * @param oldKey Pointer to the current 6-byte key used for authentication
- * @param accessBits Pointer to the 4-byte access bits array to set for the sector
- * @return true if the key change was successful, false otherwise
- */
-bool changeSectorKey(byte trailerBlock, MFRC522 &mfrc522, byte *newKey, byte *oldKey, byte *accessBits);
-
 #endif // DAG_CONSTANTS_H
