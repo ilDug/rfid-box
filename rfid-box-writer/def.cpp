@@ -18,44 +18,39 @@
  * @brief Primary Block Array for Data Storage
  * @details List of MIFARE Classic 1K blocks available for passphrase storage.
  *          Each block contains 16 bytes of data, totaling 720 bytes (45 blocks × 16 bytes).
+ *          Sector trailers (blocks 3, 7, 11, etc.) are excluded as they contain keys and access bits.
+ *
+ *          Sectors from 0 to 3 are avoided TO PREVENT CONFLICTS with manufacturer data.
  */
 int blocks[] = {
-    4, 5, 6,    // Sector 1 - Data blocks (Block 7 is sector trailer)
-    8, 9, 10,   // Sector 2 - Data blocks (Block 11 is sector trailer)
-    12, 13, 14, // Sector 3 - Data blocks (Block 15 is sector trailer)
-    16, 17, 18, // Sector 4 - Data blocks (Block 19 is sector trailer)
-    20, 21, 22, // Sector 5 - Data blocks (Block 23 is sector trailer)
-    24, 25, 26, // Sector 6 - Data blocks (Block 27 is sector trailer)
-    28, 29, 30, // Sector 7 - Data blocks (Block 31 is sector trailer)
-    32, 33, 34, // Sector 8 - Data blocks (Block 35 is sector trailer)
-    36, 37, 38, // Sector 9 - Data blocks (Block 39 is sector trailer)
-    40, 41, 42, // Sector 10 - Data blocks (Block 43 is sector trailer)
-    44, 45, 46, // Sector 11 - Data blocks (Block 47 is sector trailer)
-    48, 49, 50, // Sector 12 - Data blocks (Block 51 is sector trailer)
-    52, 53, 54, // Sector 13 - Data blocks (Block 55 is sector trailer)
-    56, 57, 58, // Sector 14 - Data blocks (Block 59 is sector trailer)
-    60, 61, 62  // Sector 15 - Data blocks (Block 63 is sector trailer)
+    4, 5, 6,    // Sector 1 - Data block
+    8, 9, 10,   // Sector 2 - Data blocks
+    12, 13, 14, // Sector 3 - Data blocks
+    16, 17, 18, // Sector 4 - Data blocks
+    20, 21, 22, // Sector 5 - Data blocks
+    24, 25, 26, // Sector 6 - Data blocks
+    28, 29, 30, // Sector 7 - Data blocks
+    32, 33, 34, // Sector 8 - Data blocks
+    36, 37, 38, // Sector 9 - Data blocks
+    40, 41, 42, // Sector 10 - Data blocks
+    44, 45, 46, // Sector 11 - Data blocks
+    48, 49, 50, // Sector 12 - Data blocks
+    52, 53, 54, // Sector 13 - Data blocks
+    56, 57, 58, // Sector 14 - Data blocks
+    60, 61, 62  // Sector 15 - Data blocks
 };
 
 /**
- * @brief Individual Sector Block Arrays
- * @details Pre-defined arrays for accessing individual sectors if needed.
+ * @brief Trailer Blocks Array
+ * @details List of MIFARE Classic 1K sector trailer blocks used for key and access bit storage.
  */
-int sector1[] = {4, 5, 6};     // Sector 1 data blocks (48 bytes capacity)
-int sector2[] = {8, 9, 10};    // Sector 2 data blocks (48 bytes capacity)
-int sector3[] = {12, 13, 14};  // Sector 3 data blocks (48 bytes capacity)
-int sector4[] = {16, 17, 18};  // Sector 4 data blocks (48 bytes capacity)
-int sector5[] = {20, 21, 22};  // Sector 5 data blocks (48 bytes capacity)
-int sector6[] = {24, 25, 26};  // Sector 6 data blocks (48 bytes capacity)
-int sector7[] = {28, 29, 30};  // Sector 7 data blocks (48 bytes capacity)
-int sector8[] = {32, 33, 34};  // Sector 8 data blocks (48 bytes capacity)
-int sector9[] = {36, 37, 38};  // Sector 9 data blocks (48 bytes capacity)
-int sector10[] = {40, 41, 42}; // Sector 10 data blocks (48 bytes capacity)
-int sector11[] = {44, 45, 46}; // Sector 11 data blocks (48 bytes capacity)
-int sector12[] = {48, 49, 50}; // Sector 12 data blocks (48 bytes capacity)
-int sector13[] = {52, 53, 54}; // Sector 13 data blocks (48 bytes capacity)
-int sector14[] = {56, 57, 58}; // Sector 14 data blocks (48 bytes capacity)
-int sector15[] = {60, 61, 62}; // Sector 15 data blocks (48 bytes capacity)
+int trailerBlocks[] = {
+    7, 11, 15,  // Sector 1 - Trailer blocks
+    19, 23, 27, // Sector 2 - Trailer blocks
+    31, 35, 39, // Sector 3 - Trailer blocks
+    43, 47, 51, // Sector 4 - Trailer blocks
+    55, 59, 63  // Sector 5 - Trailer blocks
+};
 
 // ============================================================================
 // AUDIO FEEDBACK SYSTEM IMPLEMENTATION
@@ -279,4 +274,55 @@ void triggerErrorAndWaitForReset(DagButton *btn, bool *fired)
         }
         delay(100); // Prevent excessive polling and reduce power consumption
     }
+}
+
+/**
+ * @brief Change factory key to custom key for a specific sector
+ */
+bool changeSectorKey(byte trailerBlock, MFRC522 &mfrc522, byte *newKey, byte *oldKey, byte *accessBits)
+{
+    MFRC522::StatusCode status;
+
+    // Authenticate using the old key
+    status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, trailerBlock, oldKey, &(mfrc522.uid));
+    if (status != MFRC522::STATUS_OK)
+    {
+        Serial.print(F("Authentication failed for sector "));
+        Serial.print(sector);
+        Serial.print(F(": "));
+        Serial.println(mfrc522.GetStatusCodeName(status));
+        return false;
+    }
+
+    // Prepare new trailer block data with new key and access bits
+    byte buffer[16];
+    for (byte i = 0; i < 6; i++)
+    {
+        buffer[i] = newKey[i]; // New Key A
+    }
+    for (byte i = 0; i < 4; i++)
+    {
+        buffer[6 + i] = accessBits[i]; // Access Bits
+    }
+    for (byte i = 0; i < 6; i++)
+    {
+        buffer[10 + i] = newKey[i]; // New Key B (same as Key A for simplicity)
+    }
+
+    // Write the new trailer block
+    status = mfrc522.MIFARE_Write(trailerBlock, buffer, 16);
+    if (status != MFRC522::STATUS_OK)
+    {
+        Serial.print(F("Failed to write new key for sector "));
+        Serial.print(sector);
+        Serial.print(F(": "));
+        Serial.println(mfrc522.GetStatusCodeName(status));
+        return false;
+    }
+
+    Serial.print(F("Successfully changed key for sector "));
+    Serial.println(sector);
+
+    mfrc522.PCD_StopCrypto1(); // Stop encryption on PCD
+    return true;
 }
