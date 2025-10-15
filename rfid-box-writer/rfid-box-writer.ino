@@ -101,10 +101,10 @@ void setup()
 
     // Initialize RFID authentication key
     // Using factory default key (FFFFFFFFFFFF) for MIFARE Classic cards
-    // Alternative: use custom cryptographic key from def.h
+    // Alternative: use custom cryptographic key from data.h
     for (byte i = 0; i < MFRC522::MF_KEY_SIZE; i++)
-        key.keyByte[i] = 0xFF;
-    // key.keyByte[i] = cryptokey[i]; // Uncomment to use custom key
+        key.keyByte[i] = default_key[i]; // default_key is defined in data.h
+    // key.keyByte[i] = crypto_key[i]; // Uncomment to use custom key
 
     // Initialize LCD display and show welcome message
     lcd_init(&lcd, VERSION);
@@ -390,6 +390,64 @@ void blinkIfSetMode()
 // ============================================================================
 // RFID CARD OPERATIONS
 // ============================================================================
+
+/**
+ * Function to change the sector key for a specific MIFARE Classic sector
+ * @param trailerBlock The trailer block number of the sector to change
+ * @param mfrc522 Reference to the MFRC522 instance used for communication
+ * @param newKey Pointer to the new 6-byte key to set for the sector
+ * @param oldKey Pointer to the current 6-byte key used for authentication
+ * @param accessBits Pointer to the 4-byte access bits array to set for the sector
+ * @return true if the key change was successful, false otherwise
+ */
+bool changeSectorKey(byte trailerBlock, byte *newKey, MFRC522::MIFARE_Key oldKey)
+{
+    MFRC522::StatusCode status;
+
+    // Authenticate using the old key
+    status = rfid.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, trailerBlock, &oldKey, &(rfid.uid));
+
+    if (status != MFRC522::STATUS_OK)
+    {
+        Serial.print(F("Authentication failed for block "));
+        Serial.print(trailerBlock);
+        Serial.print(F(": "));
+        Serial.println(rfid.GetStatusCodeName(status));
+        return false;
+    }
+
+    // Prepare new trailer block data with new key and access bits
+    byte buffer[16];
+    for (byte i = 0; i < 6; i++)
+    {
+        buffer[i] = newKey[i]; // New Key A
+    }
+    for (byte i = 0; i < 4; i++)
+    {
+        buffer[6 + i] = accessBits[i]; // Access Bits
+    }
+    for (byte i = 0; i < 6; i++)
+    {
+        buffer[10 + i] = newKey[i]; // New Key B (same as Key A for simplicity)
+    }
+
+    // Write the new trailer block
+    status = rfid.MIFARE_Write(trailerBlock, buffer, 16);
+    if (status != MFRC522::STATUS_OK)
+    {
+        Serial.print(F("Failed to write new key for block "));
+        Serial.print(trailerBlock);
+        Serial.print(F(": "));
+        Serial.println(rfid.GetStatusCodeName(status));
+        return false;
+    }
+
+    Serial.print(F("Successfully changed key for sector  "));
+    Serial.println(((trailerBlock - 3) / 4));
+
+    rfid.PCD_StopCrypto1(); // Stop encryption on PCD
+    return true;
+}
 
 /**
  * @brief Authenticate with RFID card using Key A

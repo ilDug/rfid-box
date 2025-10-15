@@ -1,0 +1,1 @@
+uvx pyinstaller --onefile --nowindow --clean --name secrets_generator_util main.py

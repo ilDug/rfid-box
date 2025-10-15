@@ -69,14 +69,6 @@ const int ERROR_PIN = 3;  // Error State Indicator - Signals system errors and f
 const int SIGNAL1_PIN = A1; // Reserved Signal Pin 1 - Available for future features
 const int SIGNAL2_PIN = A2; // Reserved Signal Pin 2 - Available for future features
 
-/**
- * @brief MIFARE Classic Authentication Key - Declaration
- * @details External declaration of custom 6-byte key for MIFARE Classic card authentication.
- *          Alternative to factory default key (FFFFFFFFFFFF).
- *          Used for enhanced security when reading/writing card data.
- */
-extern byte cryptokey[MFRC522::MF_KEY_SIZE];
-
 // ============================================================================
 // SYSTEM STATE ENUMERATIONS
 // ============================================================================
@@ -122,6 +114,12 @@ enum Agent
 extern int blocks[];
 
 /**
+ * @brief Trailer Blocks Array - Declaration
+ * @details External declaration of the trailerBlocks array defined in def.cpp
+ */
+extern int trailerBlocks[];
+
+/**
  * @brief Number of blocks in the main blocks array
  * @details Total number of data blocks available for passphrase storage
  *          This constant allows for proper array size calculation in other files
@@ -129,24 +127,10 @@ extern int blocks[];
 const int BLOCKS_COUNT = 45; // 15 sectors × 3 data blocks per sector
 
 /**
- * @brief Individual Sector Block Arrays - Declarations
- * @details External declarations of sector-specific arrays defined in def.cpp
+ * @brief Number of trailer blocks in the trailerBlocks array
+ * @details Total number of sector trailer blocks used for key and access bit storage
  */
-extern int sector1[];  // Sector 1 data blocks (48 bytes capacity)
-extern int sector2[];  // Sector 2 data blocks (48 bytes capacity)
-extern int sector3[];  // Sector 3 data blocks (48 bytes capacity)
-extern int sector4[];  // Sector 4 data blocks (48 bytes capacity)
-extern int sector5[];  // Sector 5 data blocks (48 bytes capacity)
-extern int sector6[];  // Sector 6 data blocks (48 bytes capacity)
-extern int sector7[];  // Sector 7 data blocks (48 bytes capacity)
-extern int sector8[];  // Sector 8 data blocks (48 bytes capacity)
-extern int sector9[];  // Sector 9 data blocks (48 bytes capacity)
-extern int sector10[]; // Sector 10 data blocks (48 bytes capacity)
-extern int sector11[]; // Sector 11 data blocks (48 bytes capacity)
-extern int sector12[]; // Sector 12 data blocks (48 bytes capacity)
-extern int sector13[]; // Sector 13 data blocks (48 bytes capacity)
-extern int sector14[]; // Sector 14 data blocks (48 bytes capacity)
-extern int sector15[]; // Sector 15 data blocks (48 bytes capacity)
+const int TRAILER_BLOCKS_COUNT = 15; // 15 sectors
 
 // ============================================================================
 // FUNCTION DECLARATIONS
