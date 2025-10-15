@@ -35,3 +35,17 @@ build/
 *.exe
 *.out
 *.app
+
+# python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+*.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.ruff_cache/
