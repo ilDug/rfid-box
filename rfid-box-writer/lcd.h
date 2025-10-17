@@ -24,9 +24,8 @@
  * @brief Inizializza il display LCD I2C
  * @param lcd Puntatore all'oggetto LCD_I2C
  * @param version Stringa contenente la versione del programma da visualizzare
- * @return true se l'inizializzazione è completata con successo, false altrimenti
  */
-bool lcd_init(LCD_I2C *lcd, const String &version);
+void lcd_init(LCD_I2C *lcd, const String &version);
 
 /**
  * @brief Mostra lo stato di attesa (idle) del sistema

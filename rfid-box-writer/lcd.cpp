@@ -13,7 +13,7 @@
 // INIZIALIZZAZIONE E CONFIGURAZIONE LCD
 // ============================================================================
 
-bool lcd_init(LCD_I2C *lcd, const String &version)
+void lcd_init(LCD_I2C *lcd, const String &version)
 {
     // Passo 1: Inizializzazione hardware del display LCD
     lcd->begin();
@@ -32,7 +32,6 @@ bool lcd_init(LCD_I2C *lcd, const String &version)
     delay(2000);
     // Passo 8: Pulizia completa dello schermo per prepararlo all'uso normale
     lcd->clear();
-    return true; // Inizializzazione completata con successo
 }
 
 // ============================================================================
