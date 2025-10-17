@@ -11,7 +11,8 @@
 const String VERSION = "v1.0.0";
 
 // main passphrase (max 135 characters)
-const String mainPassphrase = "soJ0ijae1yee2yohChoop6ieshohrex5eeVuk7Cooghiu5She5OhpaingaicheG5";
+const String mainPassphrase = "SuperMegaS3cretP4ssphraseToKeepHidden4EverLockedUpInAS4f3Place00";
+// CHANGE THIS PASSHPRASE TO YOUR OWN CUSTOM PASSPHRASE FOR BETTER SECURITY!
 
 // ============================================================================
 // MIFARE CLASSIC BLOCKS TO USE
@@ -60,7 +61,7 @@ const byte default_key[MFRC522::MF_KEY_SIZE] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x
  * @details External declaration of access bits for MIFARE Classic card data blocks.
  *          These bits control read/write access to specific data blocks on the card.
  */
-const byte accessBits[4] = {0xFF, 0x07, 0x80, 0x69};
+const byte accessBits[4] = {0xFF, 0x07, 0x80, 0x69}; // default values for data blocks with custom key protection
 
 /**
  * @brief MIFARE Classic Authentication Key (Constant Declaration)
@@ -70,7 +71,7 @@ const byte accessBits[4] = {0xFF, 0x07, 0x80, 0x69};
  *          This key must match the one programmed on the cards using the key-changer utility.
  */
 const byte crypto_key[MFRC522::MF_KEY_SIZE] = {0x01, 0x02, 0x13, 0x51, 0x09, 0x0F};
-
+// CHANGE THIS KEY TO YOUR OWN CUSTOM KEY FOR BETTER SECURITY!
 /************************************************/
 
 #endif
