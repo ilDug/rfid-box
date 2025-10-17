@@ -184,7 +184,7 @@ Nella modalità di scrittura, il dispositivo:
 ### Passphrase Predefinita
 La passphrase principale è definita in `data.h`:
 ```cpp
-String mainPassphrase = "soJ0ijae1yee2yohChoop6ieshohrex5eeVuk7Cooghiu5She5OhpaingaicheG5";
+String mainPassphrase = "64char_passphrase_example_1234567890abcdefghij";
 ```
 
 ### Blocchi RFID Utilizzati
